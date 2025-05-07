@@ -277,46 +277,31 @@ export const contentController = {
       const { typeId, id } = req.params
 
       // First check if content exists
-      const { data: existingContent } = await supabase
+      const { data: existingContent, error: findError } = await supabase
         .from('contents')
         .select('*')
         .eq('id', id)
-        .eq('type_id', typeId)
         .single()
 
-      if (!existingContent) {
+      if (findError || !existingContent) {
         return res.status(404).json({
           message: 'Content not found',
+          details: findError?.details,
         })
       }
 
-      // Extract fields from request body
-      const {
-        title,
-        slug,
-        content,
-        author,
-        featuredImage,
-        metaDescription,
-        publishedAt,
-        status,
-        tags,
-      } = req.body
-
-      // Create update payload with snake_case keys
+      // Remove properties that might be undefined
       const updateData = {
-        title,
-        slug,
-        content,
-        author,
-        featured_image: featuredImage,
-        meta_description: metaDescription,
-        published_at: publishedAt,
-        status,
-        tags,
-        type_id: typeId,
+        ...existingContent, // Keep existing data
+        ...req.body, // Merge new data
+        type_id: typeId, // Ensure type_id is set
         updated_at: new Date().toISOString(),
       }
+
+      // Clean undefined values
+      Object.keys(updateData).forEach(
+        (key) => updateData[key] === undefined && delete updateData[key]
+      )
 
       // Perform the update
       const { data, error } = await supabase
@@ -334,13 +319,13 @@ export const contentController = {
         })
       }
 
-      res.status(200).json({
+      return res.status(200).json({
         message: 'Content updated successfully',
         content: data,
       })
     } catch (error: any) {
       console.error('Error updating content:', error)
-      res.status(500).json({
+      return res.status(500).json({
         message: 'Internal server error',
         error: error.message,
       })
