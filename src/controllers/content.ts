@@ -276,14 +276,16 @@ export const contentController = {
     try {
       const { typeId, slug } = req.params
 
-      // First check if content exists using the slug from data object
+      // Modified query to handle JSON data properly
       const { data: existingContent, error: findError } = await supabase
         .from('contents')
         .select('*')
-        .eq('data->slug', slug) // Changed to look inside data object
+        .eq('data:slug', slug) // Changed from data->slug to data:slug
         .single()
 
       if (findError || !existingContent) {
+        console.log('Find error:', findError)
+        console.log('Existing content:', existingContent)
         return res.status(404).json({
           message: 'Content not found',
           details: findError?.details,
@@ -311,7 +313,7 @@ export const contentController = {
       const { data, error } = await supabase
         .from('contents')
         .update(updateData)
-        .eq('data->slug', slug) // Changed to look inside data object
+        .eq('data:slug', slug) // Changed here as well
         .select()
         .single()
 
