@@ -276,11 +276,11 @@ export const contentController = {
     try {
       const { typeId, slug } = req.params
 
-      // First check if content exists
+      // First check if content exists using the slug from data object
       const { data: existingContent, error: findError } = await supabase
         .from('contents')
         .select('*')
-        .eq('slug', slug)
+        .eq('data->slug', slug) // Changed to look inside data object
         .single()
 
       if (findError || !existingContent) {
@@ -290,25 +290,28 @@ export const contentController = {
         })
       }
 
-      // Transform camelCase to snake_case
+      // Transform camelCase to snake_case and prepare the data object
       const { featuredImage, metaDescription, publishedAt, ...restBody } =
         req.body
 
-      // Prepare update data with correct column names
+      // Prepare update data structure
       const updateData = {
-        ...restBody,
-        featured_image: featuredImage,
-        meta_description: metaDescription,
-        published_at: publishedAt,
+        data: {
+          // Nest everything under data
+          ...restBody,
+          featured_image: featuredImage,
+          meta_description: metaDescription,
+          published_at: publishedAt,
+        },
         type_id: typeId,
         updated_at: new Date().toISOString(),
       }
 
-      // Perform the update using slug
+      // Perform the update using the slug from data object
       const { data, error } = await supabase
         .from('contents')
         .update(updateData)
-        .eq('slug', slug)
+        .eq('data->slug', slug) // Changed to look inside data object
         .select()
         .single()
 
