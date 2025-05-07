@@ -181,16 +181,15 @@ export const contentController = {
 
   // Content Methods
   createContent: async (req: Request, res: Response) => {
+    const { typeId } = req.params
     try {
-      const { typeId } = req.params
-      const content: Content = {
-        type_id: typeId,
-        data: req.body,
-      }
-
       const { data, error } = await supabase
         .from('contents')
-        .insert(content)
+        .insert({
+          ...req.body,
+          type_id: typeId,
+          user_id: req.user?.id, // Add user_id from authenticated user
+        })
         .select()
         .single()
 
@@ -276,20 +275,35 @@ export const contentController = {
   updateContent: async (req: Request, res: Response) => {
     try {
       const { typeId, id } = req.params
-      const content: Content = {
-        type_id: typeId,
-        data: req.body,
+
+      // First check if content exists
+      const { data: existingContent, error: findError } = await supabase
+        .from('contents')
+        .select('*')
+        .eq('id', id)
+        .eq('type_id', typeId)
+        .single()
+
+      if (findError || !existingContent) {
+        return res.status(404).json({
+          message: 'Content not found',
+          details: findError?.details,
+        })
       }
 
+      // Perform the update
       const { data, error } = await supabase
         .from('contents')
-        .update(content)
+        .update({
+          ...req.body,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', id)
+        .eq('type_id', typeId)
         .select()
         .single()
 
       if (error) {
-        console.error('Supabase error:', error)
         return res.status(400).json({
           message: error.message,
           details: error.details,
