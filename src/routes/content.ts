@@ -15,7 +15,7 @@ router.delete('/types/:id', requireAuth, contentController.deleteContentType)
 router.post('/:typeId', requireAuth, contentController.createContent)
 router.get('/:typeId', contentController.getContents)
 router.get('/:typeId/:id', contentController.getContent)
-router.put('/:typeId/:id', requireAuth, contentController.updateContent)
+router.put('/:typeId/:slug', requireAuth, contentController.updateContent)
 router.delete('/:typeId/:id', requireAuth, contentController.deleteContent)
 
 export const contentRoutes = router

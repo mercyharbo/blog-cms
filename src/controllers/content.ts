@@ -274,13 +274,13 @@ export const contentController = {
 
   updateContent: async (req: Request, res: Response) => {
     try {
-      const { typeId, id } = req.params
+      const { typeId, slug } = req.params
 
       // First check if content exists
       const { data: existingContent, error: findError } = await supabase
         .from('contents')
         .select('*')
-        .eq('id', id)
+        .eq('slug', slug)
         .single()
 
       if (findError || !existingContent) {
@@ -304,11 +304,11 @@ export const contentController = {
         updated_at: new Date().toISOString(),
       }
 
-      // Perform the update
+      // Perform the update using slug
       const { data, error } = await supabase
         .from('contents')
         .update(updateData)
-        .eq('id', id)
+        .eq('slug', slug)
         .select()
         .single()
 
