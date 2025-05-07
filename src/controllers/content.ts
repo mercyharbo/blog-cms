@@ -291,12 +291,13 @@ export const contentController = {
         })
       }
 
-      // Perform the update
+      // Perform the update without explicitly setting updated_at
+      // as it's handled by Supabase's built-in timestamp trigger
       const { data, error } = await supabase
         .from('contents')
         .update({
           ...req.body,
-          updated_at: new Date().toISOString(),
+          type_id: typeId, // ensure type_id stays the same
         })
         .eq('id', id)
         .eq('type_id', typeId)
