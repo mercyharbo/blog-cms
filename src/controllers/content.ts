@@ -290,15 +290,13 @@ export const contentController = {
         })
       }
 
-      // Transform the request body to match database column names
-      const {
-        featuredImage, // Handle camelCase to snake_case conversion
-        ...restBody
-      } = req.body
+      // Transform camelCase to snake_case
+      const { featuredImage, metaDescription, ...restBody } = req.body
 
       const updateData = {
         ...restBody,
-        featured_image: featuredImage, // Map to correct column name
+        featured_image: featuredImage,
+        meta_description: metaDescription,
         type_id: typeId,
         updated_at: new Date().toISOString(),
       }
