@@ -290,18 +290,19 @@ export const contentController = {
         })
       }
 
-      // Remove properties that might be undefined
+      // Transform camelCase to snake_case
+      const { featuredImage, metaDescription, publishedAt, ...restBody } =
+        req.body
+
+      // Prepare update data with correct column names
       const updateData = {
-        ...existingContent, // Keep existing data
-        ...req.body, // Merge new data
-        type_id: typeId, // Ensure type_id is set
+        ...restBody,
+        featured_image: featuredImage,
+        meta_description: metaDescription,
+        published_at: publishedAt,
+        type_id: typeId,
         updated_at: new Date().toISOString(),
       }
-
-      // Clean undefined values
-      Object.keys(updateData).forEach(
-        (key) => updateData[key] === undefined && delete updateData[key]
-      )
 
       // Perform the update
       const { data, error } = await supabase
