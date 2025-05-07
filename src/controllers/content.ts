@@ -290,13 +290,30 @@ export const contentController = {
         })
       }
 
-      // Transform camelCase to snake_case
-      const { featuredImage, metaDescription, ...restBody } = req.body
+      // Extract fields from request body
+      const {
+        title,
+        slug,
+        content,
+        author,
+        featuredImage,
+        metaDescription,
+        publishedAt,
+        status,
+        tags,
+      } = req.body
 
+      // Create update payload with snake_case keys
       const updateData = {
-        ...restBody,
+        title,
+        slug,
+        content,
+        author,
         featured_image: featuredImage,
         meta_description: metaDescription,
+        published_at: publishedAt,
+        status,
+        tags,
         type_id: typeId,
         updated_at: new Date().toISOString(),
       }
@@ -310,6 +327,7 @@ export const contentController = {
         .single()
 
       if (error) {
+        console.error('Update error:', error)
         return res.status(400).json({
           message: error.message,
           details: error.details,
