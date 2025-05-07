@@ -276,28 +276,33 @@ export const contentController = {
     try {
       const { typeId, id } = req.params
 
-      // First check if content exists
-      const { data: existingContent, error: findError } = await supabase
-        .from('contents')
-        .select('*')
-        .eq('id', id)
-        .eq('type_id', typeId)
-        .single()
+      // Destructure fields from request body
+      const {
+        title,
+        slug,
+        content,
+        featured_image,
+        excerpt,
+        status,
+        published_at,
+        tags,
+        ...otherData
+      } = req.body
 
-      if (findError || !existingContent) {
-        return res.status(404).json({
-          message: 'Content not found',
-          details: findError?.details,
-        })
-      }
-
-      // Perform the update without explicitly setting updated_at
-      // as it's handled by Supabase's built-in timestamp trigger
+      // Perform the update
       const { data, error } = await supabase
         .from('contents')
         .update({
-          ...req.body,
-          type_id: typeId, // ensure type_id stays the same
+          title,
+          slug,
+          content,
+          featured_image,
+          excerpt,
+          status,
+          published_at,
+          tags,
+          data: otherData, // Store additional fields in data JSONB
+          type_id: typeId,
         })
         .eq('id', id)
         .eq('type_id', typeId)
