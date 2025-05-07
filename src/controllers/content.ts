@@ -290,28 +290,23 @@ export const contentController = {
         })
       }
 
-      // Destructure fields from request body
+      // Transform the request body to match database column names
       const {
-        title,
-        slug,
-        content,
-        featured_image,
-        excerpt,
-        status,
-        published_at,
-        tags,
-        ...otherData
+        featuredImage, // Handle camelCase to snake_case conversion
+        ...restBody
       } = req.body
 
-      // Perform the update with spread operator to include all fields
+      const updateData = {
+        ...restBody,
+        featured_image: featuredImage, // Map to correct column name
+        type_id: typeId,
+        updated_at: new Date().toISOString(),
+      }
+
+      // Perform the update
       const { data, error } = await supabase
         .from('contents')
-        .update({
-          ...existingContent, // Keep existing data
-          ...req.body, // Override with new data
-          type_id: typeId, // Ensure type_id stays the same
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single()
