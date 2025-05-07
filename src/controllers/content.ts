@@ -276,6 +276,20 @@ export const contentController = {
     try {
       const { typeId, id } = req.params
 
+      // First check if content exists
+      const { data: existingContent } = await supabase
+        .from('contents')
+        .select('*')
+        .eq('id', id)
+        .eq('type_id', typeId)
+        .single()
+
+      if (!existingContent) {
+        return res.status(404).json({
+          message: 'Content not found',
+        })
+      }
+
       // Destructure fields from request body
       const {
         title,
@@ -289,23 +303,16 @@ export const contentController = {
         ...otherData
       } = req.body
 
-      // Perform the update
+      // Perform the update with spread operator to include all fields
       const { data, error } = await supabase
         .from('contents')
         .update({
-          title,
-          slug,
-          content,
-          featured_image,
-          excerpt,
-          status,
-          published_at,
-          tags,
-          data: otherData, // Store additional fields in data JSONB
-          type_id: typeId,
+          ...existingContent, // Keep existing data
+          ...req.body, // Override with new data
+          type_id: typeId, // Ensure type_id stays the same
+          updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('type_id', typeId)
         .select()
         .single()
 
