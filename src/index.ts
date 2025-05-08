@@ -15,7 +15,7 @@ const app = express()
 // CORS configuration
 const corsOptions = {
   origin: [
-    'http://localhost:3000',
+    'http://localhost:5000',
     'http://localhost:3001',
     'https://blog-cms-iml5.onrender.com',
     'http://blog-cms-iml5.onrender.com',
@@ -62,7 +62,7 @@ app.use('/api/media', mediaRoutes)
 // Error handling middleware
 app.use(errorHandler)
 
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 5000
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`)
 })
