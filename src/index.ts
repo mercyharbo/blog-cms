@@ -12,8 +12,24 @@ dotenv.config()
 
 const app = express()
 
+// CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://blog-cms-iml5.onrender.com',
+    'http://blog-cms-iml5.onrender.com',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+}
+
+// Apply CORS with configuration
+app.use(cors(corsOptions))
+
 // Middleware with increased limits
-app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(
   express.urlencoded({
@@ -21,6 +37,9 @@ app.use(
     limit: '50mb',
   })
 )
+
+// Pre-flight requests
+app.options('*', cors(corsOptions))
 
 // Test Supabase connection
 const testConnection = async () => {
