@@ -275,24 +275,34 @@ export const contentController = {
   updateContent: async (req: Request, res: Response) => {
     try {
       const { typeId, id } = req.params
+      const contentData = req.body
 
-      // Simplest possible update - just updating the timestamp
+      // First check if the content exists
+      const { data: existingContent, error: fetchError } = await supabase
+        .from('contents')
+        .select('*')
+        .eq('type_id', typeId)
+        .eq('id', id)
+
+      if (fetchError || !existingContent || existingContent.length === 0) {
+        return res.status(404).json({
+          message: 'Content not found',
+          details:
+            fetchError?.message ||
+            'No content found with the specified ID and type',
+        })
+      }
+
+      // Update the content with new data
       const { data, error } = await supabase
         .from('contents')
         .update({
+          data: contentData, // Actually updating the content data now
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
         .eq('type_id', typeId)
         .select()
-
-      // Log everything for debugging
-      console.log('Update attempt:', {
-        typeId,
-        id,
-        timestamp: new Date().toISOString(),
-        result: { data, error },
-      })
 
       if (error) {
         console.error('Supabase error:', error)
@@ -309,6 +319,7 @@ export const contentController = {
         })
       }
 
+      // Return the updated content
       res.status(200).json({
         message: 'Content updated successfully',
         content: data[0],
