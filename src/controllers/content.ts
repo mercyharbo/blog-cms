@@ -186,9 +186,9 @@ export const contentController = {
       const { data, error } = await supabase
         .from('contents')
         .insert({
-          ...req.body,
           type_id: typeId,
-          // Temporarily remove user_id until auth is properly set up
+          data: req.body, // Nest the entire content body in the data field
+          user_id: (req as any).user?.id,
         })
         .select()
         .single()
