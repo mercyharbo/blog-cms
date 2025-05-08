@@ -276,11 +276,11 @@ export const contentController = {
     try {
       const { typeId, slug } = req.params
 
-      // Modified query to handle JSON data properly
+      // Using correct JSON path syntax for Supabase
       const { data: existingContent, error: findError } = await supabase
         .from('contents')
         .select('*')
-        .eq('data:slug', slug) // Changed from data->slug to data:slug
+        .filter('data->slug', 'eq', slug) // Changed from eq('data:slug', slug)
         .single()
 
       if (findError || !existingContent) {
@@ -313,7 +313,7 @@ export const contentController = {
       const { data, error } = await supabase
         .from('contents')
         .update(updateData)
-        .eq('data:slug', slug) // Changed here as well
+        .filter('data->slug', 'eq', slug) // Changed here as well
         .select()
         .single()
 
