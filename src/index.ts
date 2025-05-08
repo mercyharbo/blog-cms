@@ -14,27 +14,43 @@ const app = express()
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:5000'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'https://blog-cms-frontend-nine.vercel.app',
+    'https://blog-cms-iml5.onrender.com',
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'Accept',
+    'Origin',
+    'X-Requested-With',
+  ],
   exposedHeaders: ['Authorization'],
   credentials: true,
   optionsSuccessStatus: 200,
   preflightContinue: false,
+  maxAge: 86400, // Enable CORS preflight caching for 24 hours
 }
 
 // Apply CORS with configuration
 app.use(cors(corsOptions))
 
-// Ensure CORS headers are set for all routes
+// Ensure CORS headers are set for all routes, including errors
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin)
+  const origin = req.headers.origin
+  if (origin && corsOptions.origin.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin)
+  }
   res.header('Access-Control-Allow-Credentials', 'true')
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   res.header(
     'Access-Control-Allow-Headers',
     'Origin, X-Requested-With, Content-Type, Accept, Authorization'
   )
+  res.header('Access-Control-Max-Age', '86400')
   next()
 })
 
