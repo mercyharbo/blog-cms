@@ -14,20 +14,32 @@ const app = express()
 
 // CORS configuration
 const corsOptions = {
-  origin: [
-    'http://localhost:5000',
-    'http://localhost:3001',
-    'https://blog-cms-iml5.onrender.com',
-    'http://blog-cms-iml5.onrender.com',
-  ],
+  origin: ['http://localhost:3000', 'http://localhost:5000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['Authorization'],
   credentials: true,
   optionsSuccessStatus: 200,
+  preflightContinue: false,
 }
 
 // Apply CORS with configuration
 app.use(cors(corsOptions))
+
+// Ensure CORS headers are set for all routes
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin)
+  res.header('Access-Control-Allow-Credentials', 'true')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+  )
+  next()
+})
+
+// Handle preflight requests
+app.options('*', cors(corsOptions))
 
 // Middleware with increased limits
 app.use(express.json({ limit: '50mb' }))
@@ -37,9 +49,6 @@ app.use(
     limit: '50mb',
   })
 )
-
-// Pre-flight requests
-app.options('*', cors(corsOptions))
 
 // Test Supabase connection
 const testConnection = async () => {
