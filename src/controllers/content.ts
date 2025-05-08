@@ -33,15 +33,97 @@ interface Content {
   id?: string
   type_id: string
   data: {
-    title?: string
-    slug?: string
-    author?: string
-    mainImage?: string
-    categories?: string[]
-    publishedAt?: string
-    body?: any // For rich text content
+    title: string
+    slug: string
+    author: string
+    content: string
+    cover_image: {
+      url: string
+      alt: string
+      caption?: string
+    }
+    featured_image?: string
+    excerpt: string
+    status: 'draft' | 'published' | 'archived'
+    published_at?: string
+    tags: string[]
+    meta_description: string
+    meta_title?: string
+    meta_keywords?: string[]
+    reading_time?: number
+    category?: string
+    last_modified?: string
+    is_featured?: boolean
+    related_posts?: string[]
+    social_image?: {
+      url: string
+      alt: string
+    }
+    canonical_url?: string
+    language?: string
+    translations?: {
+      [key: string]: string // language code -> content ID mapping
+    }
     [key: string]: any
   }
+  user_id?: string
+  created_at?: string
+  updated_at?: string
+}
+
+// Utility functions for content processing
+const autoGenerateMetadata = (content: any) => {
+  // Generate meta title if not provided
+  if (!content.meta_title && content.title) {
+    content.meta_title = content.title
+  }
+
+  // Generate meta description from excerpt if not provided
+  if (!content.meta_description && content.excerpt) {
+    content.meta_description =
+      content.excerpt.length > 160
+        ? `${content.excerpt.substring(0, 157)}...`
+        : content.excerpt
+  }
+
+  // Generate keywords from title, excerpt, and tags
+  if (!content.meta_keywords && content.tags) {
+    const keywordSources = [
+      content.title,
+      content.excerpt,
+      ...(content.tags || []),
+    ].filter(Boolean)
+
+    const keywords = new Set(
+      keywordSources
+        .join(' ')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .split(/\s+/)
+        .filter((word) => word.length > 2)
+    )
+    content.meta_keywords = Array.from(keywords)
+  }
+
+  // Calculate reading time if not provided
+  if (!content.reading_time && content.content) {
+    const wordsPerMinute = 200
+    const wordCount = content.content.trim().split(/\s+/).length
+    content.reading_time = Math.ceil(wordCount / wordsPerMinute)
+  }
+
+  // Use cover image for social image if not provided
+  if (!content.social_image && content.cover_image) {
+    content.social_image = {
+      url: content.cover_image.url,
+      alt: content.cover_image.alt || content.title,
+    }
+  }
+
+  // Set last_modified
+  content.last_modified = new Date().toISOString()
+
+  return content
 }
 
 export const contentController = {
@@ -183,12 +265,15 @@ export const contentController = {
   createContent: async (req: Request, res: Response) => {
     const { typeId } = req.params
     try {
+      // Auto-generate metadata before saving
+      const contentData = autoGenerateMetadata(req.body)
+
       const { data, error } = await supabase
         .from('contents')
         .insert({
-          ...req.body,
           type_id: typeId,
-          user_id: req.user?.id, // Add user_id from authenticated user
+          data: contentData,
+          user_id: (req as any).user?.id,
         })
         .select()
         .single()
@@ -274,66 +359,104 @@ export const contentController = {
 
   updateContent: async (req: Request, res: Response) => {
     try {
-      const { typeId, slug } = req.params
+      const { typeId, id } = req.params
 
-      // Using correct JSON path syntax for Supabase
-      const { data: existingContent, error: findError } = await supabase
+      // Auto-generate metadata before updating
+      const contentData = autoGenerateMetadata(req.body)
+
+      // First check if the content exists
+      const { data: existingContent, error: fetchError } = await supabase
         .from('contents')
         .select('*')
-        .filter('data->slug', 'eq', slug) // Changed from eq('data:slug', slug)
-        .single()
+        .eq('type_id', typeId)
+        .eq('id', id)
 
-      if (findError || !existingContent) {
-        console.log('Find error:', findError)
-        console.log('Existing content:', existingContent)
+      if (fetchError || !existingContent || existingContent.length === 0) {
         return res.status(404).json({
           message: 'Content not found',
-          details: findError?.details,
+          details:
+            fetchError?.message ||
+            'No content found with the specified ID and type',
         })
       }
 
-      // Transform camelCase to snake_case and prepare the data object
-      const { featuredImage, metaDescription, publishedAt, ...restBody } =
-        req.body
-
-      // Prepare update data structure
-      const updateData = {
-        data: {
-          // Nest everything under data
-          ...restBody,
-          featured_image: featuredImage,
-          meta_description: metaDescription,
-          published_at: publishedAt,
-        },
-        type_id: typeId,
-        updated_at: new Date().toISOString(),
+      // Merge existing data with updates to preserve any fields not included in the update
+      const mergedData = {
+        ...existingContent[0].data,
+        ...contentData,
       }
 
-      // Perform the update using the slug from data object
+      // Update the content
       const { data, error } = await supabase
         .from('contents')
-        .update(updateData)
-        .filter('data->slug', 'eq', slug) // Changed here as well
+        .update({
+          data: mergedData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('type_id', typeId)
         .select()
-        .single()
 
       if (error) {
-        console.error('Update error:', error)
+        console.error('Supabase error:', error)
         return res.status(400).json({
           message: error.message,
           details: error.details,
         })
       }
 
-      return res.status(200).json({
+      if (!data || data.length === 0) {
+        return res.status(404).json({
+          message: 'Content was not updated',
+          details: 'No content was affected by the update operation',
+        })
+      }
+
+      res.status(200).json({
         message: 'Content updated successfully',
-        content: data,
+        content: data[0],
       })
     } catch (error: any) {
       console.error('Error updating content:', error)
-      return res.status(500).json({
+      res.status(500).json({
         message: 'Internal server error',
         error: error.message,
+      })
+    }
+  },
+
+  // Debug method to verify content
+  verifyContent: async (req: Request, res: Response) => {
+    const { typeId, id } = req.params
+
+    try {
+      // Do a raw select to see exactly what's in the database
+      const { data, error } = await supabase
+        .from('contents')
+        .select('*')
+        .eq('type_id', typeId)
+        .eq('id', id)
+
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+          query: { typeId: typeId, id: id },
+        })
+      }
+
+      res.status(200).json({
+        exists: data && data.length > 0,
+        content: data,
+        query: { typeId: typeId, id: id },
+      })
+    } catch (error: any) {
+      console.error('Error verifying content:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
+        query: { typeId: typeId, id: id },
       })
     }
   },
