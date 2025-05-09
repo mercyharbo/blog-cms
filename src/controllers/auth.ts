@@ -5,10 +5,12 @@ export const authController = {
   signup: async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body
-
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: 'https://blog-cms-frontend-nine.vercel.app/auth/callback'
+        }
       })
 
       if (error) throw error
