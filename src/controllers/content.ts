@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { supabase } from '../config/supabase'
+import { getSupabaseClient } from '../config/supabase'
 
 interface ContentTypeField {
   name: string
@@ -51,6 +51,14 @@ export const contentController = {
       console.log('Received request body:', req.body)
 
       const contentType: ContentType = req.body
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
 
       // Validate required fields
       if (!contentType.name || !contentType.title || !contentType.fields) {
@@ -67,12 +75,14 @@ export const contentController = {
         })
       }
 
-      const { data, error } = await supabase
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('content_types')
         .insert({
           name: contentType.name,
           title: contentType.title,
           fields: contentType.fields,
+          user_id: userId,
         })
         .select()
         .single()
@@ -100,7 +110,20 @@ export const contentController = {
 
   getContentTypes: async (req: Request, res: Response) => {
     try {
-      const { data, error } = await supabase.from('content_types').select('*')
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
+        .from('content_types')
+        .select('*')
+        .eq('user_id', userId)
 
       if (error) throw error
 
@@ -117,13 +140,30 @@ export const contentController = {
   getContentType: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const { data, error } = await supabase
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('content_types')
         .select('*')
         .eq('id', id)
+        .eq('user_id', userId)
         .single()
 
       if (error) throw error
+
+      if (!data) {
+        return res.status(404).json({
+          message: 'Content type not found or unauthorized',
+        })
+      }
 
       res.status(200).json({
         contentType: data,
@@ -139,14 +179,31 @@ export const contentController = {
     try {
       const { id } = req.params
       const contentType: ContentType = req.body
-      const { data, error } = await supabase
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('content_types')
         .update(contentType)
         .eq('id', id)
+        .eq('user_id', userId)
         .select()
         .single()
 
       if (error) throw error
+
+      if (!data) {
+        return res.status(404).json({
+          message: 'Content type not found or unauthorized',
+        })
+      }
 
       res.status(200).json({
         message: 'Content type updated successfully',
@@ -162,10 +219,36 @@ export const contentController = {
   deleteContentType: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const { error } = await supabase
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+
+      // First check if the content type exists and belongs to the user
+      const { data: existingType, error: fetchError } = await client
+        .from('content_types')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchError || !existingType) {
+        return res.status(404).json({
+          message: 'Content type not found or unauthorized',
+        })
+      }
+
+      const { error } = await client
         .from('content_types')
         .delete()
         .eq('id', id)
+        .eq('user_id', userId)
 
       if (error) throw error
 
@@ -182,13 +265,23 @@ export const contentController = {
   // Content Methods
   createContent: async (req: Request, res: Response) => {
     const { typeId } = req.params
+    const userId = (req as any).user?.id
+    const authHeader = req.headers.authorization
+
+    if (!userId || !authHeader) {
+      return res.status(401).json({
+        message: 'User not authenticated',
+      })
+    }
+
     try {
-      const { data, error } = await supabase
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('contents')
         .insert({
           type_id: typeId,
-          data: req.body, // Nest the entire content body in the data field
-          user_id: (req as any).user?.id,
+          data: req.body,
+          user_id: userId,
         })
         .select()
         .single()
@@ -213,14 +306,24 @@ export const contentController = {
       })
     }
   },
-
   getContents: async (req: Request, res: Response) => {
     try {
       const { typeId } = req.params
-      const { data, error } = await supabase
+      const userId = (req as any).user?.id
+      const authHeader = req.headers.authorization
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('contents')
-        .select('*')
+        .select('*, user_id')
         .eq('type_id', typeId)
+        .eq('user_id', userId)
 
       if (error) {
         console.error('Supabase error:', error)
@@ -241,15 +344,25 @@ export const contentController = {
       })
     }
   },
-
   getContent: async (req: Request, res: Response) => {
     try {
       const { typeId, id } = req.params
-      const { data, error } = await supabase
+      const userId = (req as any).user?.id
+      const authHeader = req.headers.authorization
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('contents')
         .select('*')
         .eq('type_id', typeId)
         .eq('id', id)
+        .eq('user_id', userId)
         .single()
 
       if (error) {
@@ -257,6 +370,12 @@ export const contentController = {
         return res.status(400).json({
           message: error.message,
           details: error.details,
+        })
+      }
+
+      if (!data) {
+        return res.status(404).json({
+          message: 'Content not found or unauthorized',
         })
       }
 
@@ -276,17 +395,29 @@ export const contentController = {
     try {
       const { typeId, id } = req.params
       const contentData = req.body
+      const userId = (req as any).user?.id
+      const authHeader = req.headers.authorization
 
-      // First check if the content exists
-      const { data: existingContent, error: fetchError } = await supabase
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+
+      // First check if the content exists and belongs to the user
+      const { data: existingContent, error: fetchError } = await client
         .from('contents')
         .select('*')
         .eq('type_id', typeId)
         .eq('id', id)
+        .eq('user_id', userId)
+        .single()
 
-      if (fetchError || !existingContent || existingContent.length === 0) {
+      if (fetchError || !existingContent) {
         return res.status(404).json({
-          message: 'Content not found',
+          message: 'Content not found or unauthorized',
           details:
             fetchError?.message ||
             'No content found with the specified ID and type',
@@ -294,14 +425,15 @@ export const contentController = {
       }
 
       // Update the content with new data
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('contents')
         .update({
-          data: contentData, // Actually updating the content data now
+          data: contentData,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
         .eq('type_id', typeId)
+        .eq('user_id', userId)
         .select()
 
       if (error) {
@@ -319,7 +451,6 @@ export const contentController = {
         })
       }
 
-      // Return the updated content
       res.status(200).json({
         message: 'Content updated successfully',
         content: data[0],
@@ -336,35 +467,44 @@ export const contentController = {
   // Debug method to verify content
   verifyContent: async (req: Request, res: Response) => {
     const { typeId, id } = req.params
+    const userId = (req as any).user?.id
+    const authHeader = req.headers.authorization
+
+    if (!userId || !authHeader) {
+      return res.status(401).json({
+        message: 'User not authenticated',
+      })
+    }
 
     try {
-      // Do a raw select to see exactly what's in the database
-      const { data, error } = await supabase
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('contents')
         .select('*')
         .eq('type_id', typeId)
         .eq('id', id)
+        .eq('user_id', userId)
 
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
           message: error.message,
           details: error.details,
-          query: { typeId: typeId, id: id },
+          query: { typeId, id },
         })
       }
 
       res.status(200).json({
         exists: data && data.length > 0,
         content: data,
-        query: { typeId: typeId, id: id },
+        query: { typeId, id },
       })
     } catch (error: any) {
       console.error('Error verifying content:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,
-        query: { typeId: typeId, id: id },
+        query: { typeId, id },
       })
     }
   },
@@ -372,11 +512,41 @@ export const contentController = {
   deleteContent: async (req: Request, res: Response) => {
     try {
       const { typeId, id } = req.params
-      const { error } = await supabase
+      const userId = (req as any).user?.id
+      const authHeader = req.headers.authorization
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+
+      // First check if the content exists and belongs to the user
+      const { data: existingContent, error: fetchError } = await client
+        .from('contents')
+        .select('*')
+        .eq('type_id', typeId)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchError || !existingContent) {
+        return res.status(404).json({
+          message: 'Content not found or unauthorized',
+          details:
+            fetchError?.message ||
+            'No content found with the specified ID and type',
+        })
+      }
+
+      const { error } = await client
         .from('contents')
         .delete()
         .eq('id', id)
         .eq('type_id', typeId)
+        .eq('user_id', userId)
 
       if (error) {
         console.error('Supabase error:', error)
@@ -401,7 +571,20 @@ export const contentController = {
 
 export const getContentTypes = async (req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase.from('content_types').select('*')
+    const authHeader = req.headers.authorization
+    const userId = (req as any).user?.id
+
+    if (!userId || !authHeader) {
+      return res.status(401).json({
+        message: 'User not authenticated',
+      })
+    }
+
+    const client = getSupabaseClient(authHeader)
+    const { data, error } = await client
+      .from('content_types')
+      .select('*')
+      .eq('user_id', userId)
 
     if (error) {
       console.error('Error fetching content types:', error)

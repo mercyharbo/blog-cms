@@ -1,15 +1,19 @@
 import { Request, Response } from 'express'
-import { supabase } from '../config/supabase'
+import { getSupabaseClient } from '../config/supabase'
 
 interface MediaMetadata {
   id?: string
   filename: string
-  originalName: string
-  mimeType: string
+  originalname: string
+  mimetype: string
   size: number
   url: string
-  userId: string
-  createdAt?: string
+  user_id: string
+  description?: string
+  alt_text?: string
+  metadata?: any
+  created_at?: string
+  updated_at?: string
 }
 
 export const mediaController = {
@@ -20,9 +24,10 @@ export const mediaController = {
       }
 
       const file = req.file
-      const userId = (req as any).user?.id
+      const user_id = (req as any).user?.id
+      const authHeader = req.headers.authorization
 
-      if (!userId) {
+      if (!user_id || !authHeader) {
         throw new Error('User not authenticated')
       }
 
@@ -30,8 +35,10 @@ export const mediaController = {
       const timestamp = Date.now()
       const uniqueFilename = `${timestamp}-${file.originalname}`
 
+      const client = getSupabaseClient(authHeader)
+
       // Upload file to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await client.storage
         .from('media')
         .upload(uniqueFilename, file.buffer, {
           contentType: file.mimetype,
@@ -42,19 +49,19 @@ export const mediaController = {
       // Get the public URL
       const {
         data: { publicUrl },
-      } = supabase.storage.from('media').getPublicUrl(uniqueFilename)
+      } = client.storage.from('media').getPublicUrl(uniqueFilename)
 
       // Save media metadata
       const mediaMetadata: MediaMetadata = {
         filename: uniqueFilename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
         size: file.size,
         url: publicUrl,
-        userId,
+        user_id,
       }
 
-      const { data: metadata, error: metadataError } = await supabase
+      const { data: metadata, error: metadataError } = await client
         .from('media')
         .insert(mediaMetadata)
         .select()
@@ -75,16 +82,19 @@ export const mediaController = {
 
   getMediaList: async (req: Request, res: Response) => {
     try {
-      const userId = (req as any).user?.id
-      if (!userId) {
+      const user_id = (req as any).user?.id
+      const authHeader = req.headers.authorization
+
+      if (!user_id || !authHeader) {
         throw new Error('User not authenticated')
       }
 
-      const { data, error } = await supabase
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('media')
         .select('*')
-        .eq('userId', userId)
-        .order('createdAt', { ascending: false })
+        .eq('user_id', user_id)
+        .order('created_at', { ascending: false })
 
       if (error) throw error
 
@@ -101,16 +111,19 @@ export const mediaController = {
   getMedia: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const userId = (req as any).user?.id
-      if (!userId) {
+      const user_id = (req as any).user?.id
+      const authHeader = req.headers.authorization
+
+      if (!user_id || !authHeader) {
         throw new Error('User not authenticated')
       }
 
-      const { data, error } = await supabase
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
         .from('media')
         .select('*')
         .eq('id', id)
-        .eq('userId', userId)
+        .eq('user_id', user_id)
         .single()
 
       if (error) throw error
@@ -128,34 +141,38 @@ export const mediaController = {
   deleteMedia: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const userId = (req as any).user?.id
-      if (!userId) {
+      const user_id = (req as any).user?.id
+      const authHeader = req.headers.authorization
+
+      if (!user_id || !authHeader) {
         throw new Error('User not authenticated')
       }
 
+      const client = getSupabaseClient(authHeader)
+
       // Get media metadata
-      const { data: media, error: fetchError } = await supabase
+      const { data: media, error: fetchError } = await client
         .from('media')
         .select('*')
         .eq('id', id)
-        .eq('userId', userId)
+        .eq('user_id', user_id)
         .single()
 
       if (fetchError) throw fetchError
 
       // Delete file from storage
-      const { error: storageError } = await supabase.storage
+      const { error: storageError } = await client.storage
         .from('media')
         .remove([media.filename])
 
       if (storageError) throw storageError
 
       // Delete metadata
-      const { error: deleteError } = await supabase
+      const { error: deleteError } = await client
         .from('media')
         .delete()
         .eq('id', id)
-        .eq('userId', userId)
+        .eq('user_id', user_id)
 
       if (deleteError) throw deleteError
 

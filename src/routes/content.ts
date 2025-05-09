@@ -13,9 +13,9 @@ router.delete('/types/:id', requireAuth, contentController.deleteContentType)
 
 // Content routes
 router.post('/:typeId', requireAuth, contentController.createContent)
-router.get('/:typeId', contentController.getContents)
-router.get('/:typeId/:id', contentController.getContent)
-router.get('/:typeId/:id/verify', contentController.verifyContent) // Add this line
+router.get('/:typeId', requireAuth, contentController.getContents)
+router.get('/:typeId/:id', requireAuth, contentController.getContent)
+router.get('/:typeId/:id/verify', requireAuth, contentController.verifyContent)
 router.put('/:typeId/:id', requireAuth, contentController.updateContent)
 router.delete('/:typeId/:id', requireAuth, contentController.deleteContent)
 
