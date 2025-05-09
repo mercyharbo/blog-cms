@@ -107,7 +107,6 @@ export const contentController = {
       })
     }
   },
-
   getContentTypes: async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization
@@ -120,10 +119,13 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
+
+      // First get all public content types and user's own content types
       const { data, error } = await client
         .from('content_types')
         .select('*')
-        .eq('user_id', userId)
+        .or(`user_id.is.null,user_id.eq.${userId}`)
+        .order('created_at', { ascending: false })
 
       if (error) throw error
 
@@ -319,11 +321,29 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { data, error } = await client
+
+      // Always fetch user's own contents with their content type information
+      let query = client
         .from('contents')
-        .select('*, user_id')
-        .eq('type_id', typeId)
+        .select(
+          `
+          *,
+          content_types (
+            name,
+            title,
+            fields
+          )
+        `
+        )
         .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      // If a specific typeId is provided (not 'all'), filter by that type
+      if (typeId && typeId !== 'all') {
+        query = query.eq('type_id', typeId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Supabase error:', error)
