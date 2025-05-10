@@ -457,10 +457,45 @@ export const contentController = {
       }
 
       // Transform the data to maintain consistent structure
-      const { data: contentData, ...rest } = rawContent
-      const content = {
-        ...rest,
-        data: contentData, // Keep the content data nested under 'data'
+      let content = rawContent
+
+      // If data is already nested properly, keep as is
+      if (content.data && !content.data.data) {
+        // Keep as is
+      }
+      // If data is double nested, flatten it
+      else if (content.data && content.data.data) {
+        content = {
+          ...content,
+          data: content.data.data,
+        }
+      }
+      // If data is spread at root level, nest it properly
+      else {
+        const {
+          id,
+          type_id,
+          user_id,
+          status,
+          scheduled_at,
+          published_at,
+          created_at,
+          updated_at,
+          content_types,
+          ...dataFields
+        } = content
+        content = {
+          id,
+          type_id,
+          user_id,
+          status,
+          scheduled_at,
+          published_at,
+          created_at,
+          updated_at,
+          content_types,
+          data: dataFields,
+        }
       }
 
       res.status(200).json({
