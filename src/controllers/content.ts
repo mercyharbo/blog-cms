@@ -353,8 +353,7 @@ export const contentController = {
       if (typeId && typeId !== 'all') {
         query = query.eq('type_id', typeId)
       }
-
-      const { data, error } = await query
+      const { data: rawContents, error } = await query
 
       if (error) {
         console.error('Supabase error:', error)
@@ -362,10 +361,48 @@ export const contentController = {
           message: error.message,
           details: error.details,
         })
-      }
+      } // Ensure data is not double-nested and transform to consistent structure
+      const contents = rawContents?.map((content) => {
+        // If data is already nested properly, return as is
+        if (content.data && !content.data.data) {
+          return content
+        }
+        // If data is double nested, flatten it
+        if (content.data && content.data.data) {
+          return {
+            ...content,
+            data: content.data.data,
+          }
+        }
+        // If data is spread at root level, nest it properly
+        const {
+          id,
+          type_id,
+          user_id,
+          status,
+          scheduled_at,
+          published_at,
+          created_at,
+          updated_at,
+          content_types,
+          ...dataFields
+        } = content
+        return {
+          id,
+          type_id,
+          user_id,
+          status,
+          scheduled_at,
+          published_at,
+          created_at,
+          updated_at,
+          content_types,
+          data: dataFields,
+        }
+      })
 
       res.status(200).json({
-        contents: data,
+        contents,
       })
     } catch (error: any) {
       console.error('Error getting contents:', error)
@@ -388,9 +425,18 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { data, error } = await client
+      const { data: rawContent, error } = await client
         .from('contents')
-        .select('*')
+        .select(
+          `
+          *,
+          content_types (
+            name,
+            title,
+            fields
+          )
+        `
+        )
         .eq('type_id', typeId)
         .eq('id', id)
         .eq('user_id', userId)
@@ -404,14 +450,21 @@ export const contentController = {
         })
       }
 
-      if (!data) {
+      if (!rawContent) {
         return res.status(404).json({
           message: 'Content not found or unauthorized',
         })
       }
 
+      // Transform the data to maintain consistent structure
+      const { data: contentData, ...rest } = rawContent
+      const content = {
+        ...rest,
+        data: contentData, // Keep the content data nested under 'data'
+      }
+
       res.status(200).json({
-        content: data,
+        content,
       })
     } catch (error: any) {
       console.error('Error getting content:', error)
