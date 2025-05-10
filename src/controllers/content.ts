@@ -312,7 +312,9 @@ export const contentController = {
 
       if (!userId || !authHeader) {
         return res.status(401).json({
+          status: false,
           message: 'User not authenticated',
+          content: null,
         })
       }
 
@@ -328,7 +330,9 @@ export const contentController = {
 
       if (contentTypeError || !contentType) {
         return res.status(404).json({
+          status: false,
           message: 'Content type not found',
+          content: null,
         })
       }
 
@@ -351,8 +355,9 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
-          details: error.details,
+          content: null,
         })
       }
 
@@ -363,14 +368,16 @@ export const contentController = {
       }
 
       res.status(201).json({
+        status: true,
         message: 'Content created successfully',
         content: transformedContent,
       })
     } catch (error: any) {
       console.error('Error creating content:', error)
       res.status(500).json({
+        status: false,
         message: 'Internal server error',
-        error: error.message,
+        content: null,
       })
     }
   },
@@ -382,7 +389,9 @@ export const contentController = {
 
       if (!userId || !authHeader) {
         return res.status(401).json({
+          status: false,
           message: 'User not authenticated',
+          contents: null,
         })
       }
 
@@ -404,8 +413,9 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
-          details: error.details,
+          contents: null,
         })
       }
 
@@ -416,13 +426,16 @@ export const contentController = {
       }))
 
       res.status(200).json({
+        status: true,
+        message: 'Contents fetched successfully',
         contents: transformedContents,
       })
     } catch (error: any) {
       console.error('Error fetching contents:', error)
       res.status(500).json({
+        status: false,
         message: 'Internal server error',
-        error: error.message,
+        contents: null,
       })
     }
   },
@@ -435,7 +448,9 @@ export const contentController = {
 
       if (!userId || !authHeader) {
         return res.status(401).json({
+          status: false,
           message: 'User not authenticated',
+          content: null,
         })
       }
 
@@ -452,14 +467,17 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
-          details: error.details,
+          content: null,
         })
       }
 
       if (!data) {
         return res.status(404).json({
+          status: false,
           message: 'Content not found',
+          content: null,
         })
       }
 
@@ -470,13 +488,16 @@ export const contentController = {
       }
 
       res.status(200).json({
+        status: true,
+        message: 'Content fetched successfully',
         content: transformedContent,
       })
     } catch (error: any) {
       console.error('Error fetching content:', error)
       res.status(500).json({
+        status: false,
         message: 'Internal server error',
-        error: error.message,
+        content: null,
       })
     }
   },
