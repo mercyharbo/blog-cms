@@ -11,14 +11,15 @@ interface ContentType {
 interface Content {
   id?: string
   type_id: string
+  user_id: string
   status: 'draft' | 'published' | 'scheduled'
   scheduled_at?: string
   published_at?: string
-  data: {
-    title: string
-    slug: string
-    description: string
-  }
+  title: string
+  slug: string
+  description: string
+  created_at?: string
+  updated_at?: string
 }
 
 export const contentController = {
@@ -304,7 +305,7 @@ export const contentController = {
   // Content Methods
   createContent: async (req: Request, res: Response) => {
     try {
-      const typeId = req.params.id // Changed from typeId to id to match route
+      const typeId = req.params.id
       const content = req.body
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
@@ -331,14 +332,18 @@ export const contentController = {
         })
       }
 
-      // Create the content
+      // Create the content with nested data structure
       const { data, error } = await client
         .from('contents')
         .insert({
           type_id: typeId,
           user_id: userId,
           status: 'draft',
-          data: content,
+          data: {
+            title: content.title,
+            slug: content.slug,
+            description: content.description,
+          },
         })
         .select()
         .single()
@@ -351,9 +356,15 @@ export const contentController = {
         })
       }
 
+      // Transform the response to merge the nested data
+      const transformedContent = {
+        ...data,
+        ...data.data,
+      }
+
       res.status(201).json({
         message: 'Content created successfully',
-        content: data,
+        content: transformedContent,
       })
     } catch (error: any) {
       console.error('Error creating content:', error)
@@ -365,7 +376,7 @@ export const contentController = {
   },
   getContents: async (req: Request, res: Response) => {
     try {
-      const typeId = req.query.typeId as string // Get typeId from query parameter
+      const typeId = req.query.typeId as string
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
@@ -379,20 +390,16 @@ export const contentController = {
       let query = client
         .from('contents')
         .select(
-          `
-          *,
-          content_type:content_types(*)
-        `
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at'
         )
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
-      // If typeId is provided, filter by it
       if (typeId) {
         query = query.eq('type_id', typeId)
       }
 
-      const { data, error } = await query
+      const { data: contents, error } = await query
 
       if (error) {
         console.error('Supabase error:', error)
@@ -402,8 +409,14 @@ export const contentController = {
         })
       }
 
+      // Transform the response to merge the nested data
+      const transformedContents = contents.map((content) => ({
+        ...content,
+        ...content.data,
+      }))
+
       res.status(200).json({
-        contents: data,
+        contents: transformedContents,
       })
     } catch (error: any) {
       console.error('Error fetching contents:', error)
@@ -429,7 +442,9 @@ export const contentController = {
       const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('contents')
-        .select('*')
+        .select(
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)'
+        )
         .eq('id', id)
         .eq('user_id', userId)
         .single()
@@ -448,8 +463,14 @@ export const contentController = {
         })
       }
 
+      // Transform the response to merge the nested data
+      const transformedContent = {
+        ...data,
+        ...data.data,
+      }
+
       res.status(200).json({
-        content: data,
+        content: transformedContent,
       })
     } catch (error: any) {
       console.error('Error fetching content:', error)
@@ -477,7 +498,11 @@ export const contentController = {
       const { data, error } = await client
         .from('contents')
         .update({
-          data: content,
+          data: {
+            title: content.title,
+            slug: content.slug,
+            description: content.description,
+          },
         })
         .eq('id', id)
         .eq('user_id', userId)
@@ -498,9 +523,15 @@ export const contentController = {
         })
       }
 
+      // Transform the response to merge the nested data
+      const transformedContent = {
+        ...data,
+        ...data.data,
+      }
+
       res.status(200).json({
         message: 'Content updated successfully',
-        content: data,
+        content: transformedContent,
       })
     } catch (error: any) {
       console.error('Error updating content:', error)
@@ -662,9 +693,11 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { data, error } = await client
+      const { data: contents, error } = await client
         .from('contents')
-        .select('*')
+        .select(
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)'
+        )
         .eq('type_id', type_id)
         .eq('status', 'published')
 
@@ -676,8 +709,14 @@ export const contentController = {
         })
       }
 
+      // Transform the response to merge the nested data
+      const transformedContents = contents.map((content) => ({
+        ...content,
+        ...content.data,
+      }))
+
       res.status(200).json({
-        contents: data,
+        contents: transformedContents,
       })
     } catch (error: any) {
       console.error('Error fetching published contents:', error)
@@ -702,7 +741,9 @@ export const contentController = {
       const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('contents')
-        .select('*')
+        .select(
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)'
+        )
         .eq('id', id)
         .eq('status', 'published')
         .single()
@@ -721,8 +762,14 @@ export const contentController = {
         })
       }
 
+      // Transform the response to merge the nested data
+      const transformedContent = {
+        ...data,
+        ...data.data,
+      }
+
       res.status(200).json({
-        content: data,
+        content: transformedContent,
       })
     } catch (error: any) {
       console.error('Error fetching published content:', error)
