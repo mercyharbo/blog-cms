@@ -304,7 +304,7 @@ export const contentController = {
   // Content Methods
   createContent: async (req: Request, res: Response) => {
     try {
-      const { type_id } = req.params
+      const typeId = req.params.id // Changed from typeId to id to match route
       const content = req.body
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
@@ -321,7 +321,7 @@ export const contentController = {
       const { data: contentType, error: contentTypeError } = await client
         .from('content_types')
         .select('*')
-        .eq('id', type_id)
+        .eq('id', typeId)
         .eq('user_id', userId)
         .single()
 
@@ -335,7 +335,7 @@ export const contentController = {
       const { data, error } = await client
         .from('contents')
         .insert({
-          type_id,
+          type_id: typeId,
           user_id: userId,
           status: 'draft',
           data: content,
@@ -363,10 +363,9 @@ export const contentController = {
       })
     }
   },
-
   getContents: async (req: Request, res: Response) => {
     try {
-      const { type_id } = req.params
+      const typeId = req.query.typeId as string // Get typeId from query parameter
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
@@ -377,11 +376,23 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { data, error } = await client
+      let query = client
         .from('contents')
-        .select('*')
-        .eq('type_id', type_id)
+        .select(
+          `
+          *,
+          content_type:content_types(*)
+        `
+        )
         .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      // If typeId is provided, filter by it
+      if (typeId) {
+        query = query.eq('type_id', typeId)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Supabase error:', error)
@@ -614,6 +625,31 @@ export const contentController = {
   },
 
   // Public Methods
+  getAllContentTypes: async (req: Request, res: Response) => {
+    try {
+      const client = getSupabaseClient(process.env.SUPABASE_SERVICE_KEY || '')
+      const { data, error } = await client.from('content_types').select('*')
+
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
+
+      res.status(200).json({
+        contentTypes: data,
+      })
+    } catch (error: any) {
+      console.error('Error fetching all content types:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
+      })
+    }
+  },
+
   getPublishedContents: async (req: Request, res: Response) => {
     try {
       const { type_id } = req.params
@@ -690,6 +726,49 @@ export const contentController = {
       })
     } catch (error: any) {
       console.error('Error fetching published content:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
+      })
+    }
+  },
+
+  getAllUserContents: async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
+      const { data, error } = await client
+        .from('contents')
+        .select(
+          `
+          *,
+          content_type:content_types(*)
+        `
+        )
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
+
+      res.status(200).json({
+        contents: data,
+      })
+    } catch (error: any) {
+      console.error('Error fetching all contents:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,

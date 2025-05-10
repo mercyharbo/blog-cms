@@ -12,12 +12,12 @@ router.put('/types/:id', requireAuth, contentController.updateContentType)
 router.delete('/types/:id', requireAuth, contentController.deleteContentType)
 
 // Content routes
-router.post('/:typeId', requireAuth, contentController.createContent)
-router.get('/:typeId', requireAuth, contentController.getContents)
-router.get('/:typeId/:id', requireAuth, contentController.getContent)
-router.get('/:typeId/:id/verify', requireAuth, contentController.verifyContent)
-router.put('/:typeId/:id', requireAuth, contentController.updateContent)
-router.delete('/:typeId/:id', requireAuth, contentController.deleteContent)
+router.get('/contents', requireAuth, contentController.getContents) // Get all contents with optional type filter
+router.get('/contents/:id', requireAuth, contentController.getContent)
+router.post('/types/:id/contents', requireAuth, contentController.createContent)
+router.put('/contents/:id/verify', requireAuth, contentController.verifyContent)
+router.put('/contents/:id', requireAuth, contentController.updateContent)
+router.delete('/contents/:id', requireAuth, contentController.deleteContent)
 
 // Public routes (no auth required)
 router.get('/public/posts', contentController.getPublishedContents)
