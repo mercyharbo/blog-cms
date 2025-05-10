@@ -1,32 +1,11 @@
 import { Request, Response } from 'express'
 import { getSupabaseClient } from '../config/supabase'
 
-interface ContentTypeField {
-  name: string
-  type:
-    | 'string'
-    | 'text'
-    | 'richText'
-    | 'image'
-    | 'reference'
-    | 'array'
-    | 'datetime'
-    | 'slug'
-  title: string
-  required?: boolean
-  options?: {
-    source?: string
-    maxLength?: number
-    hotspot?: boolean
-    referenceType?: string
-  }
-}
-
 interface ContentType {
   id?: string
-  name: string
   title: string
-  fields: ContentTypeField[]
+  slug: string
+  description: string
 }
 
 interface Content {
@@ -36,14 +15,9 @@ interface Content {
   scheduled_at?: string
   published_at?: string
   data: {
-    title?: string
-    slug?: string
-    author?: string
-    mainImage?: string
-    categories?: string[]
-    publishedAt?: string
-    body?: any // For rich text content
-    [key: string]: any
+    title: string
+    slug: string
+    description: string
   }
 }
 
@@ -53,7 +27,7 @@ export const contentController = {
     try {
       console.log('Received request body:', req.body)
 
-      const contentType: ContentType = req.body
+      const simpleContentType = req.body as ContentType
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
@@ -64,29 +38,59 @@ export const contentController = {
       }
 
       // Validate required fields
-      if (!contentType.name || !contentType.title || !contentType.fields) {
+      if (
+        !simpleContentType.title ||
+        !simpleContentType.slug ||
+        !simpleContentType.description
+      ) {
         return res.status(400).json({
           message:
-            'Missing required fields: name, title, and fields are required',
+            'Missing required fields: title, slug, and description are required',
         })
-      }
-
-      // Validate fields array
-      if (!Array.isArray(contentType.fields)) {
-        return res.status(400).json({
-          message: 'Fields must be an array',
-        })
+      } // Transform the simple payload into the required database format
+      const contentTypeData = {
+        title: simpleContentType.title,
+        name: simpleContentType.slug,
+        description: simpleContentType.description,
+        user_id: userId,
+        fields: [
+          {
+            name: 'title',
+            type: 'string',
+            title: 'Title',
+            required: true,
+          },
+          {
+            name: 'slug',
+            type: 'string',
+            title: 'Slug',
+            required: true,
+          },
+          {
+            name: 'description',
+            type: 'text',
+            title: 'Description',
+            required: false,
+          },
+          {
+            name: 'created_at',
+            type: 'datetime',
+            title: 'Created At',
+            required: true,
+          },
+          {
+            name: 'updated_at',
+            type: 'datetime',
+            title: 'Updated At',
+            required: true,
+          },
+        ],
       }
 
       const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('content_types')
-        .insert({
-          name: contentType.name,
-          title: contentType.title,
-          fields: contentType.fields,
-          user_id: userId,
-        })
+        .insert(contentTypeData)
         .select()
         .single()
 
@@ -110,6 +114,7 @@ export const contentController = {
       })
     }
   },
+
   getContentTypes: async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization
@@ -122,22 +127,27 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-
-      // First get all public content types and user's own content types
       const { data, error } = await client
         .from('content_types')
         .select('*')
-        .or(`user_id.is.null,user_id.eq.${userId}`)
-        .order('created_at', { ascending: false })
+        .eq('user_id', userId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
 
       res.status(200).json({
         contentTypes: data,
       })
     } catch (error: any) {
-      res.status(400).json({
-        message: error.message,
+      console.error('Error fetching content types:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
       })
     }
   },
@@ -162,11 +172,17 @@ export const contentController = {
         .eq('user_id', userId)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
 
       if (!data) {
         return res.status(404).json({
-          message: 'Content type not found or unauthorized',
+          message: 'Content type not found',
         })
       }
 
@@ -174,8 +190,10 @@ export const contentController = {
         contentType: data,
       })
     } catch (error: any) {
-      res.status(400).json({
-        message: error.message,
+      console.error('Error fetching content type:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
       })
     }
   },
@@ -183,7 +201,7 @@ export const contentController = {
   updateContentType: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const contentType: ContentType = req.body
+      const simpleContentType = req.body as ContentType
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
@@ -193,20 +211,41 @@ export const contentController = {
         })
       }
 
+      // Validate required fields
+      if (
+        !simpleContentType.title ||
+        !simpleContentType.slug ||
+        !simpleContentType.description
+      ) {
+        return res.status(400).json({
+          message: 'Missing required fields',
+        })
+      }
+
       const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('content_types')
-        .update(contentType)
+        .update({
+          title: simpleContentType.title,
+          name: simpleContentType.slug,
+          description: simpleContentType.description,
+        })
         .eq('id', id)
         .eq('user_id', userId)
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
 
       if (!data) {
         return res.status(404).json({
-          message: 'Content type not found or unauthorized',
+          message: 'Content type not found',
         })
       }
 
@@ -215,8 +254,10 @@ export const contentController = {
         contentType: data,
       })
     } catch (error: any) {
-      res.status(400).json({
-        message: error.message,
+      console.error('Error updating content type:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
       })
     }
   },
@@ -234,67 +275,70 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-
-      // First check if the content type exists and belongs to the user
-      const { data: existingType, error: fetchError } = await client
-        .from('content_types')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', userId)
-        .single()
-
-      if (fetchError || !existingType) {
-        return res.status(404).json({
-          message: 'Content type not found or unauthorized',
-        })
-      }
-
       const { error } = await client
         .from('content_types')
         .delete()
         .eq('id', id)
         .eq('user_id', userId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
 
       res.status(200).json({
         message: 'Content type deleted successfully',
       })
     } catch (error: any) {
-      res.status(400).json({
-        message: error.message,
+      console.error('Error deleting content type:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
       })
     }
   },
 
   // Content Methods
   createContent: async (req: Request, res: Response) => {
-    const { typeId } = req.params
-    const userId = (req as any).user?.id
-    const authHeader = req.headers.authorization
-
-    if (!userId || !authHeader) {
-      return res.status(401).json({
-        message: 'User not authenticated',
-      })
-    }
     try {
+      const { type_id } = req.params
+      const content = req.body
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
       const client = getSupabaseClient(authHeader)
-      const { status, scheduled_at, ...contentData } = req.body
-      const now = new Date().toISOString()
 
-      // Extract data from contentData if it exists to prevent double nesting
-      const finalData = contentData.data || contentData
+      // First verify the content type exists and belongs to the user
+      const { data: contentType, error: contentTypeError } = await client
+        .from('content_types')
+        .select('*')
+        .eq('id', type_id)
+        .eq('user_id', userId)
+        .single()
 
+      if (contentTypeError || !contentType) {
+        return res.status(404).json({
+          message: 'Content type not found',
+        })
+      }
+
+      // Create the content
       const { data, error } = await client
         .from('contents')
         .insert({
-          type_id: typeId,
-          data: finalData,
+          type_id,
           user_id: userId,
-          status: status || 'draft',
-          scheduled_at: status === 'scheduled' ? scheduled_at : null,
-          published_at: status === 'published' ? now : null,
+          status: 'draft',
+          data: content,
         })
         .select()
         .single()
@@ -319,11 +363,12 @@ export const contentController = {
       })
     }
   },
+
   getContents: async (req: Request, res: Response) => {
     try {
-      const { typeId } = req.params
-      const userId = (req as any).user?.id
+      const { type_id } = req.params
       const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
 
       if (!userId || !authHeader) {
         return res.status(401).json({
@@ -332,28 +377,11 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-
-      // Always fetch user's own contents with their content type information
-      let query = client
+      const { data, error } = await client
         .from('contents')
-        .select(
-          `
-          *,
-          content_types (
-            name,
-            title,
-            fields
-          )
-        `
-        )
+        .select('*')
+        .eq('type_id', type_id)
         .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-
-      // If a specific typeId is provided (not 'all'), filter by that type
-      if (typeId && typeId !== 'all') {
-        query = query.eq('type_id', typeId)
-      }
-      const { data: rawContents, error } = await query
 
       if (error) {
         console.error('Supabase error:', error)
@@ -361,62 +389,25 @@ export const contentController = {
           message: error.message,
           details: error.details,
         })
-      } // Ensure data is not double-nested and transform to consistent structure
-      const contents = rawContents?.map((content) => {
-        // If data is already nested properly, return as is
-        if (content.data && !content.data.data) {
-          return content
-        }
-        // If data is double nested, flatten it
-        if (content.data && content.data.data) {
-          return {
-            ...content,
-            data: content.data.data,
-          }
-        }
-        // If data is spread at root level, nest it properly
-        const {
-          id,
-          type_id,
-          user_id,
-          status,
-          scheduled_at,
-          published_at,
-          created_at,
-          updated_at,
-          content_types,
-          ...dataFields
-        } = content
-        return {
-          id,
-          type_id,
-          user_id,
-          status,
-          scheduled_at,
-          published_at,
-          created_at,
-          updated_at,
-          content_types,
-          data: dataFields,
-        }
-      })
+      }
 
       res.status(200).json({
-        contents,
+        contents: data,
       })
     } catch (error: any) {
-      console.error('Error getting contents:', error)
+      console.error('Error fetching contents:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,
       })
     }
   },
+
   getContent: async (req: Request, res: Response) => {
     try {
-      const { typeId, id } = req.params
-      const userId = (req as any).user?.id
+      const { id } = req.params
       const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
 
       if (!userId || !authHeader) {
         return res.status(401).json({
@@ -425,19 +416,9 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { data: rawContent, error } = await client
+      const { data, error } = await client
         .from('contents')
-        .select(
-          `
-          *,
-          content_types (
-            name,
-            title,
-            fields
-          )
-        `
-        )
-        .eq('type_id', typeId)
+        .select('*')
         .eq('id', id)
         .eq('user_id', userId)
         .single()
@@ -450,59 +431,17 @@ export const contentController = {
         })
       }
 
-      if (!rawContent) {
+      if (!data) {
         return res.status(404).json({
-          message: 'Content not found or unauthorized',
+          message: 'Content not found',
         })
       }
 
-      // Transform the data to maintain consistent structure
-      let content = rawContent
-
-      // If data is already nested properly, keep as is
-      if (content.data && !content.data.data) {
-        // Keep as is
-      }
-      // If data is double nested, flatten it
-      else if (content.data && content.data.data) {
-        content = {
-          ...content,
-          data: content.data.data,
-        }
-      }
-      // If data is spread at root level, nest it properly
-      else {
-        const {
-          id,
-          type_id,
-          user_id,
-          status,
-          scheduled_at,
-          published_at,
-          created_at,
-          updated_at,
-          content_types,
-          ...dataFields
-        } = content
-        content = {
-          id,
-          type_id,
-          user_id,
-          status,
-          scheduled_at,
-          published_at,
-          created_at,
-          updated_at,
-          content_types,
-          data: dataFields,
-        }
-      }
-
       res.status(200).json({
-        content,
+        content: data,
       })
     } catch (error: any) {
-      console.error('Error getting content:', error)
+      console.error('Error fetching content:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,
@@ -512,10 +451,10 @@ export const contentController = {
 
   updateContent: async (req: Request, res: Response) => {
     try {
-      const { typeId, id } = req.params
-      const contentData = req.body
-      const userId = (req as any).user?.id
+      const { id } = req.params
+      const content = req.body
       const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
 
       if (!userId || !authHeader) {
         return res.status(401).json({
@@ -524,46 +463,15 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-
-      // First check if the content exists and belongs to the user
-      const { data: existingContent, error: fetchError } = await client
-        .from('contents')
-        .select('*')
-        .eq('type_id', typeId)
-        .eq('id', id)
-        .eq('user_id', userId)
-        .single()
-
-      if (fetchError || !existingContent) {
-        return res.status(404).json({
-          message: 'Content not found or unauthorized',
-          details:
-            fetchError?.message ||
-            'No content found with the specified ID and type',
-        })
-      } // Extract data from contentData if it exists to prevent double nesting
-      const finalData = contentData.data || contentData
-
-      // Update the content with new data
       const { data, error } = await client
         .from('contents')
         .update({
-          data: finalData,
-          status: contentData.status || existingContent.status,
-          scheduled_at:
-            contentData.status === 'scheduled'
-              ? contentData.scheduled_at
-              : null,
-          published_at:
-            contentData.status === 'published'
-              ? new Date().toISOString()
-              : existingContent.published_at,
-          updated_at: new Date().toISOString(),
+          data: content,
         })
         .eq('id', id)
-        .eq('type_id', typeId)
         .eq('user_id', userId)
         .select()
+        .single()
 
       if (error) {
         console.error('Supabase error:', error)
@@ -573,16 +481,15 @@ export const contentController = {
         })
       }
 
-      if (!data || data.length === 0) {
+      if (!data) {
         return res.status(404).json({
-          message: 'Content was not updated',
-          details: 'No content was affected by the update operation',
+          message: 'Content not found',
         })
       }
 
       res.status(200).json({
         message: 'Content updated successfully',
-        content: data[0],
+        content: data,
       })
     } catch (error: any) {
       console.error('Error updating content:', error)
@@ -593,56 +500,85 @@ export const contentController = {
     }
   },
 
-  // Debug method to verify content
   verifyContent: async (req: Request, res: Response) => {
-    const { typeId, id } = req.params
-    const userId = (req as any).user?.id
-    const authHeader = req.headers.authorization
-
-    if (!userId || !authHeader) {
-      return res.status(401).json({
-        message: 'User not authenticated',
-      })
-    }
-
     try {
+      const { id } = req.params
+      const status = req.body.status as 'draft' | 'published' | 'scheduled'
+      const scheduled_at = req.body.scheduled_at as string | undefined
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          message: 'User not authenticated',
+        })
+      }
+
+      if (!['draft', 'published', 'scheduled'].includes(status)) {
+        return res.status(400).json({
+          message: 'Invalid status. Must be draft, published, or scheduled',
+        })
+      }
+
+      if (status === 'scheduled' && !scheduled_at) {
+        return res.status(400).json({
+          message: 'scheduled_at is required for scheduled status',
+        })
+      }
+
       const client = getSupabaseClient(authHeader)
+      const updateData: any = {
+        status,
+        scheduled_at: null,
+        published_at: null,
+      }
+
+      if (status === 'scheduled') {
+        updateData.scheduled_at = scheduled_at
+      } else if (status === 'published') {
+        updateData.published_at = new Date().toISOString()
+      }
+
       const { data, error } = await client
         .from('contents')
-        .select('*')
-        .eq('type_id', typeId)
+        .update(updateData)
         .eq('id', id)
         .eq('user_id', userId)
+        .select()
+        .single()
 
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
           message: error.message,
           details: error.details,
-          query: { typeId, id },
+        })
+      }
+
+      if (!data) {
+        return res.status(404).json({
+          message: 'Content not found',
         })
       }
 
       res.status(200).json({
-        exists: data && data.length > 0,
+        message: `Content ${status} successfully`,
         content: data,
-        query: { typeId, id },
       })
     } catch (error: any) {
       console.error('Error verifying content:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,
-        query: { typeId, id },
       })
     }
   },
 
   deleteContent: async (req: Request, res: Response) => {
     try {
-      const { typeId, id } = req.params
-      const userId = (req as any).user?.id
+      const { id } = req.params
       const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
 
       if (!userId || !authHeader) {
         return res.status(401).json({
@@ -651,30 +587,10 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-
-      // First check if the content exists and belongs to the user
-      const { data: existingContent, error: fetchError } = await client
-        .from('contents')
-        .select('*')
-        .eq('type_id', typeId)
-        .eq('id', id)
-        .eq('user_id', userId)
-        .single()
-
-      if (fetchError || !existingContent) {
-        return res.status(404).json({
-          message: 'Content not found or unauthorized',
-          details:
-            fetchError?.message ||
-            'No content found with the specified ID and type',
-        })
-      }
-
       const { error } = await client
         .from('contents')
         .delete()
         .eq('id', id)
-        .eq('type_id', typeId)
         .eq('user_id', userId)
 
       if (error) {
@@ -697,28 +613,24 @@ export const contentController = {
     }
   },
 
-  // Public methods for blog posts
+  // Public Methods
   getPublishedContents: async (req: Request, res: Response) => {
     try {
-      const client = getSupabaseClient()
-      const now = new Date().toISOString()
+      const { type_id } = req.params
+      const authHeader = req.headers.authorization
 
+      if (!authHeader) {
+        return res.status(401).json({
+          message: 'API key required',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('contents')
-        .select(
-          `
-          *,
-          content_types (
-            name,
-            title,
-            fields
-          )
-        `
-        )
-        .or(
-          `status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`
-        )
-        .order('created_at', { ascending: false })
+        .select('*')
+        .eq('type_id', type_id)
+        .eq('status', 'published')
 
       if (error) {
         console.error('Supabase error:', error)
@@ -728,32 +640,11 @@ export const contentController = {
         })
       }
 
-      // Update any scheduled posts that are now published
-      const scheduledPosts = data?.filter(
-        (post) => post.status === 'scheduled' && post.scheduled_at <= now
-      )
-
-      if (scheduledPosts?.length > 0) {
-        const updates = scheduledPosts.map((post) => ({
-          id: post.id,
-          status: 'published',
-          published_at: now,
-        }))
-
-        const { error: updateError } = await client
-          .from('contents')
-          .upsert(updates)
-
-        if (updateError) {
-          console.error('Error updating scheduled posts:', updateError)
-        }
-      }
-
       res.status(200).json({
         contents: data,
       })
     } catch (error: any) {
-      console.error('Error getting published contents:', error)
+      console.error('Error fetching published contents:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,
@@ -764,25 +655,20 @@ export const contentController = {
   getPublishedContent: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const client = getSupabaseClient()
-      const now = new Date().toISOString()
+      const authHeader = req.headers.authorization
 
+      if (!authHeader) {
+        return res.status(401).json({
+          message: 'API key required',
+        })
+      }
+
+      const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('contents')
-        .select(
-          `
-          *,
-          content_types (
-            name,
-            title,
-            fields
-          )
-        `
-        )
-        .or(
-          `status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`
-        )
+        .select('*')
         .eq('id', id)
+        .eq('status', 'published')
         .single()
 
       if (error) {
@@ -795,30 +681,15 @@ export const contentController = {
 
       if (!data) {
         return res.status(404).json({
-          message: 'Content not found',
+          message: 'Published content not found',
         })
-      }
-
-      // Update status if it was scheduled and is now published
-      if (data.status === 'scheduled' && data.scheduled_at <= now) {
-        const { error: updateError } = await client
-          .from('contents')
-          .update({
-            status: 'published',
-            published_at: now,
-          })
-          .eq('id', id)
-
-        if (updateError) {
-          console.error('Error updating scheduled post:', updateError)
-        }
       }
 
       res.status(200).json({
         content: data,
       })
     } catch (error: any) {
-      console.error('Error getting published content:', error)
+      console.error('Error fetching published content:', error)
       res.status(500).json({
         message: 'Internal server error',
         error: error.message,
@@ -837,7 +708,6 @@ export const getContentTypes = async (req: Request, res: Response) => {
         message: 'User not authenticated',
       })
     }
-
     const client = getSupabaseClient(authHeader)
     const { data, error } = await client
       .from('content_types')
