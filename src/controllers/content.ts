@@ -32,6 +32,9 @@ interface ContentType {
 interface Content {
   id?: string
   type_id: string
+  status: 'draft' | 'published' | 'scheduled'
+  scheduled_at?: string
+  published_at?: string
   data: {
     title?: string
     slug?: string
@@ -277,13 +280,19 @@ export const contentController = {
     }
 
     try {
-      const client = getSupabaseClient(authHeader)
+      const client = getSupabaseClient(authHeader);
+      const { status, scheduled_at, ...contentData } = req.body;
+      const now = new Date().toISOString()
+
       const { data, error } = await client
         .from('contents')
         .insert({
           type_id: typeId,
-          data: req.body,
+          data: contentData,
           user_id: userId,
+          status: status || 'draft',
+          scheduled_at: status === 'scheduled' ? scheduled_at : null,
+          published_at: status === 'published' ? now : null,
         })
         .select()
         .single()
@@ -587,6 +596,127 @@ export const contentController = {
       })
     }
   },
+
+  // Public methods for blog posts
+  getPublishedContents: async (req: Request, res: Response) => {
+    try {
+      const client = getSupabaseClient()
+      const now = new Date().toISOString()
+
+      const { data, error } = await client
+        .from('contents')
+        .select(`
+          *,
+          content_types (
+            name,
+            title,
+            fields
+          )
+        `)
+        .or(`status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
+
+      // Update any scheduled posts that are now published
+      const scheduledPosts = data?.filter(
+        (post) => post.status === 'scheduled' && post.scheduled_at <= now
+      )
+
+      if (scheduledPosts?.length > 0) {
+        const updates = scheduledPosts.map((post) => ({
+          id: post.id,
+          status: 'published',
+          published_at: now,
+        }))
+
+        const { error: updateError } = await client
+          .from('contents')
+          .upsert(updates)
+
+        if (updateError) {
+          console.error('Error updating scheduled posts:', updateError)
+        }
+      }
+
+      res.status(200).json({
+        contents: data,
+      })
+    } catch (error: any) {
+      console.error('Error getting published contents:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
+      })
+    }
+  },
+
+  getPublishedContent: async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params
+      const client = getSupabaseClient()
+      const now = new Date().toISOString()
+
+      const { data, error } = await client
+        .from('contents')
+        .select(`
+          *,
+          content_types (
+            name,
+            title,
+            fields
+          )
+        `)
+        .or(`status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`)
+        .eq('id', id)
+        .single()
+
+      if (error) {
+        console.error('Supabase error:', error)
+        return res.status(400).json({
+          message: error.message,
+          details: error.details,
+        })
+      }
+
+      if (!data) {
+        return res.status(404).json({
+          message: 'Content not found',
+        })
+      }
+
+      // Update status if it was scheduled and is now published
+      if (data.status === 'scheduled' && data.scheduled_at <= now) {
+        const { error: updateError } = await client
+          .from('contents')
+          .update({
+            status: 'published',
+            published_at: now,
+          })
+          .eq('id', id)
+
+        if (updateError) {
+          console.error('Error updating scheduled post:', updateError)
+        }
+      }
+
+      res.status(200).json({
+        content: data,
+      })
+    } catch (error: any) {
+      console.error('Error getting published content:', error)
+      res.status(500).json({
+        message: 'Internal server error',
+        error: error.message,
+      })
+    }
+  },
 }
 
 export const getContentTypes = async (req: Request, res: Response) => {
@@ -607,14 +737,21 @@ export const getContentTypes = async (req: Request, res: Response) => {
       .eq('user_id', userId)
 
     if (error) {
-      console.error('Error fetching content types:', error)
-      return res.status(500).json({ error: error.message })
+      console.error('Supabase error:', error)
+      return res.status(400).json({
+        message: error.message,
+        details: error.details,
+      })
     }
 
-    console.log('Retrieved content types:', data) // Add this for debugging
-    return res.json(data)
-  } catch (error) {
-    console.error('Error:', error)
-    return res.status(500).json({ error: 'Internal server error' })
+    res.status(200).json({
+      contentTypes: data,
+    })
+  } catch (error: any) {
+    console.error('Error getting content types:', error)
+    res.status(500).json({
+      message: 'Internal server error',
+      error: error.message,
+    })
   }
 }

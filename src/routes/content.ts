@@ -19,4 +19,8 @@ router.get('/:typeId/:id/verify', requireAuth, contentController.verifyContent)
 router.put('/:typeId/:id', requireAuth, contentController.updateContent)
 router.delete('/:typeId/:id', requireAuth, contentController.deleteContent)
 
+// Public routes (no auth required)
+router.get('/public/posts', contentController.getPublishedContents)
+router.get('/public/posts/:id', contentController.getPublishedContent)
+
 export const contentRoutes = router
