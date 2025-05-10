@@ -278,17 +278,19 @@ export const contentController = {
         message: 'User not authenticated',
       })
     }
-
     try {
-      const client = getSupabaseClient(authHeader);
-      const { status, scheduled_at, ...contentData } = req.body;
+      const client = getSupabaseClient(authHeader)
+      const { status, scheduled_at, ...contentData } = req.body
       const now = new Date().toISOString()
+
+      // Extract data from contentData if it exists to prevent double nesting
+      const finalData = contentData.data || contentData
 
       const { data, error } = await client
         .from('contents')
         .insert({
           type_id: typeId,
-          data: contentData,
+          data: finalData,
           user_id: userId,
           status: status || 'draft',
           scheduled_at: status === 'scheduled' ? scheduled_at : null,
@@ -451,13 +453,23 @@ export const contentController = {
             fetchError?.message ||
             'No content found with the specified ID and type',
         })
-      }
+      } // Extract data from contentData if it exists to prevent double nesting
+      const finalData = contentData.data || contentData
 
       // Update the content with new data
       const { data, error } = await client
         .from('contents')
         .update({
-          data: contentData,
+          data: finalData,
+          status: contentData.status || existingContent.status,
+          scheduled_at:
+            contentData.status === 'scheduled'
+              ? contentData.scheduled_at
+              : null,
+          published_at:
+            contentData.status === 'published'
+              ? new Date().toISOString()
+              : existingContent.published_at,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -605,15 +617,19 @@ export const contentController = {
 
       const { data, error } = await client
         .from('contents')
-        .select(`
+        .select(
+          `
           *,
           content_types (
             name,
             title,
             fields
           )
-        `)
-        .or(`status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`)
+        `
+        )
+        .or(
+          `status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`
+        )
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -665,15 +681,19 @@ export const contentController = {
 
       const { data, error } = await client
         .from('contents')
-        .select(`
+        .select(
+          `
           *,
           content_types (
             name,
             title,
             fields
           )
-        `)
-        .or(`status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`)
+        `
+        )
+        .or(
+          `status.eq.published,and(status.eq.scheduled,scheduled_at.lte.${now})`
+        )
         .eq('id', id)
         .single()
 
