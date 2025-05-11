@@ -1,26 +1,6 @@
 import { Request, Response } from 'express'
 import { getSupabaseClient } from '../config/supabase'
-
-interface ContentType {
-  id?: string
-  title: string
-  slug: string
-  description: string
-}
-
-interface Content {
-  id?: string
-  type_id: string
-  user_id: string
-  status: 'draft' | 'published' | 'scheduled'
-  scheduled_at?: string
-  published_at?: string
-  title: string
-  slug: string
-  description: string
-  created_at?: string
-  updated_at?: string
-}
+import type { ContentCreateInput, ContentType } from '../types/content'
 
 export const contentController = {
   // Content Type Methods
@@ -306,7 +286,7 @@ export const contentController = {
   createContent: async (req: Request, res: Response) => {
     try {
       const typeId = req.params.id
-      const content = req.body
+      const contentInput = req.body as ContentCreateInput
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
@@ -320,7 +300,38 @@ export const contentController = {
 
       const client = getSupabaseClient(authHeader)
 
-      // First verify the content type exists and belongs to the user
+      // Validate required fields
+      const missingFields = []
+      if (!contentInput.title) missingFields.push('title')
+      if (!contentInput.slug) missingFields.push('slug')
+      if (!contentInput.content) missingFields.push('content')
+      if (!contentInput.author) missingFields.push('author')
+      if (!contentInput.reading_time) missingFields.push('reading_time')
+      if (!contentInput.tags || !contentInput.tags.length)
+        missingFields.push('tags')
+
+      if (missingFields.length > 0) {
+        return res.status(400).json({
+          status: false,
+          message: `Missing required fields: ${missingFields.join(', ')}`,
+          content: null,
+        })
+      }
+
+      // Validate cover_image structure
+      if (
+        !contentInput.cover_image ||
+        !contentInput.cover_image.url ||
+        !contentInput.cover_image.alt
+      ) {
+        return res.status(400).json({
+          status: false,
+          message: 'Cover image must include both url and alt text',
+          content: null,
+        })
+      }
+
+      // Verify content type exists and belongs to the user
       const { data: contentType, error: contentTypeError } = await client
         .from('content_types')
         .select('*')
@@ -336,18 +347,29 @@ export const contentController = {
         })
       }
 
-      // Create the content with nested data structure
+      // Structure the content data properly
+      const contentData = {
+        title: contentInput.title,
+        slug: contentInput.slug,
+        content: contentInput.content,
+        author: contentInput.author,
+        cover_image: contentInput.cover_image,
+        reading_time: contentInput.reading_time,
+        tags: contentInput.tags,
+        meta_title: contentInput.meta_title,
+        meta_keywords: contentInput.meta_keywords,
+      }
+
+      // Create the content with proper data structure
       const { data, error } = await client
         .from('contents')
         .insert({
           type_id: typeId,
           user_id: userId,
           status: 'draft',
-          data: {
-            title: content.title,
-            slug: content.slug,
-            description: content.description,
-          },
+          data: contentData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .select()
         .single()
@@ -361,7 +383,7 @@ export const contentController = {
         })
       }
 
-      // Transform the response to merge the nested data
+      // Transform the response to include flattened data
       const transformedContent = {
         ...data,
         ...data.data,
@@ -419,16 +441,11 @@ export const contentController = {
         })
       }
 
-      // Transform the response to merge the nested data
-      const transformedContents = contents.map((content) => ({
-        ...content,
-        ...content.data,
-      }))
-
+      // Return contents without spreading data fields
       res.status(200).json({
         status: true,
         message: 'Contents fetched successfully',
-        contents: transformedContents,
+        contents: contents,
       })
     } catch (error: any) {
       console.error('Error fetching contents:', error)
@@ -481,16 +498,11 @@ export const contentController = {
         })
       }
 
-      // Transform the response to merge the nested data
-      const transformedContent = {
-        ...data,
-        ...data.data,
-      }
-
+      // Return the content without spreading data fields
       res.status(200).json({
         status: true,
         message: 'Content fetched successfully',
-        content: transformedContent,
+        content: data,
       })
     } catch (error: any) {
       console.error('Error fetching content:', error)
@@ -505,26 +517,100 @@ export const contentController = {
   updateContent: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const content = req.body
+      const { status, ...contentInput } =
+        req.body as Partial<ContentCreateInput> & {
+          status?: 'draft' | 'published' | 'scheduled'
+        }
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
       if (!userId || !authHeader) {
         return res.status(401).json({
+          status: false,
           message: 'User not authenticated',
+          content: null,
         })
       }
 
       const client = getSupabaseClient(authHeader)
+
+      // First get the existing content
+      const { data: existingContent, error: fetchError } = await client
+        .from('contents')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchError) {
+        console.error('Supabase error:', fetchError)
+        return res.status(400).json({
+          status: false,
+          message: fetchError.message,
+          content: null,
+        })
+      }
+
+      if (!existingContent) {
+        return res.status(404).json({
+          status: false,
+          message: 'Content not found',
+          content: null,
+        })
+      }
+
+      // Validate cover_image structure if it's being updated
+      if (
+        contentInput.cover_image &&
+        (!contentInput.cover_image.url || !contentInput.cover_image.alt)
+      ) {
+        return res.status(400).json({
+          status: false,
+          message: 'Cover image must include both url and alt text',
+          content: null,
+        })
+      }
+
+      // Merge the new data with existing data, maintaining the structure
+      const updatedData = {
+        ...existingContent.data,
+        ...(contentInput.title && { title: contentInput.title }),
+        ...(contentInput.slug && { slug: contentInput.slug }),
+        ...(contentInput.content && { content: contentInput.content }),
+        ...(contentInput.author && { author: contentInput.author }),
+        ...(contentInput.cover_image && {
+          cover_image: contentInput.cover_image,
+        }),
+        ...(contentInput.reading_time && {
+          reading_time: contentInput.reading_time,
+        }),
+        ...(contentInput.tags && { tags: contentInput.tags }),
+        ...(contentInput.meta_title && { meta_title: contentInput.meta_title }),
+        ...(contentInput.meta_keywords && {
+          meta_keywords: contentInput.meta_keywords,
+        }),
+      }
+
+      // Prepare the update object with both data and status
+      const updateObject: any = {
+        data: updatedData,
+        updated_at: new Date().toISOString(),
+      }
+
+      // Add status update if provided
+      if (status) {
+        updateObject.status = status
+        if (status === 'published') {
+          updateObject.published_at = new Date().toISOString()
+        } else if (status === 'scheduled') {
+          updateObject.scheduled_at = req.body.scheduled_at || null
+        }
+      }
+
+      // Update with merged data and status
       const { data, error } = await client
         .from('contents')
-        .update({
-          data: {
-            title: content.title,
-            slug: content.slug,
-            description: content.description,
-          },
-        })
+        .update(updateObject)
         .eq('id', id)
         .eq('user_id', userId)
         .select()
@@ -533,32 +619,23 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
-          details: error.details,
+          content: null,
         })
-      }
-
-      if (!data) {
-        return res.status(404).json({
-          message: 'Content not found',
-        })
-      }
-
-      // Transform the response to merge the nested data
-      const transformedContent = {
-        ...data,
-        ...data.data,
       }
 
       res.status(200).json({
+        status: true,
         message: 'Content updated successfully',
-        content: transformedContent,
+        content: data, // Return the raw data without spreading
       })
     } catch (error: any) {
       console.error('Error updating content:', error)
       res.status(500).json({
+        status: false,
         message: 'Internal server error',
-        error: error.message,
+        content: null,
       })
     }
   },
@@ -573,33 +650,51 @@ export const contentController = {
 
       if (!userId || !authHeader) {
         return res.status(401).json({
+          status: false,
           message: 'User not authenticated',
+          content: null,
         })
       }
 
       if (!['draft', 'published', 'scheduled'].includes(status)) {
         return res.status(400).json({
+          status: false,
           message: 'Invalid status. Must be draft, published, or scheduled',
+          content: null,
         })
       }
 
       if (status === 'scheduled' && !scheduled_at) {
         return res.status(400).json({
+          status: false,
           message: 'scheduled_at is required for scheduled status',
+          content: null,
         })
       }
 
       const client = getSupabaseClient(authHeader)
-      const updateData: any = {
-        status,
-        scheduled_at: null,
-        published_at: null,
+
+      // First check if the content exists and belongs to the user
+      const { data: existingContent, error: fetchError } = await client
+        .from('contents')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single()
+
+      if (fetchError || !existingContent) {
+        return res.status(404).json({
+          status: false,
+          message: 'Content not found',
+          content: null,
+        })
       }
 
-      if (status === 'scheduled') {
-        updateData.scheduled_at = scheduled_at
-      } else if (status === 'published') {
-        updateData.published_at = new Date().toISOString()
+      const updateData = {
+        status,
+        scheduled_at: status === 'scheduled' ? scheduled_at : null,
+        published_at: status === 'published' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
       }
 
       const { data, error } = await client
@@ -613,26 +708,23 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
-          details: error.details,
-        })
-      }
-
-      if (!data) {
-        return res.status(404).json({
-          message: 'Content not found',
+          content: null,
         })
       }
 
       res.status(200).json({
+        status: true,
         message: `Content ${status} successfully`,
-        content: data,
+        content: data, // Return the raw data without spreading
       })
     } catch (error: any) {
       console.error('Error verifying content:', error)
       res.status(500).json({
+        status: false,
         message: 'Internal server error',
-        error: error.message,
+        content: null,
       })
     }
   },
