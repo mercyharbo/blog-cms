@@ -423,7 +423,7 @@ export const contentController = {
   },
   getContents: async (req: Request, res: Response) => {
     try {
-      const typeId = req.query.typeId as string
+      const typeId = req.params.id || (req.query.typeId as string) // Get ID from either params or query
       const authHeader = req.headers.authorization
       const userId = (req as any).user?.id
 
@@ -435,6 +435,9 @@ export const contentController = {
         })
       }
 
+      console.log('Fetching contents with type ID:', typeId)
+      console.log('User ID:', userId)
+
       const client = getSupabaseClient(authHeader)
       let query = client
         .from('contents')
@@ -445,6 +448,7 @@ export const contentController = {
         .order('created_at', { ascending: false })
 
       if (typeId) {
+        console.log('Filtering by content type ID:', typeId)
         query = query.eq('type_id', typeId)
       }
 
@@ -488,30 +492,99 @@ export const contentController = {
           content: null,
         })
       }
+      console.log('Debug info for content fetch:')
+      console.log('Requested ID:', id)
+      console.log('User ID:', userId)
 
       const client = getSupabaseClient(authHeader)
+
+      // First check if this ID exists in content_types table
+      const { data: contentTypeCheck } = await client
+        .from('content_types')
+        .select('id, title')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (contentTypeCheck) {
+        console.log(
+          'WARNING: The provided ID matches a content type, not a content item'
+        )
+        console.log('Content type found:', contentTypeCheck)
+        return res.status(400).json({
+          status: false,
+          message:
+            'The provided ID belongs to a content type. To fetch a content type, use the /content-types endpoint instead.',
+          content: null,
+        })
+      }
+
+      // First, let's do a global check for the content without user filtering
+      const { data: globalCheckData, error: globalCheckError } = await client
+        .from('contents')
+        .select('user_id, status')
+        .eq('id', id)
+        .maybeSingle()
+
+      console.log('Global content check:', {
+        exists: !!globalCheckData,
+        ownedBy: globalCheckData?.user_id,
+        status: globalCheckData?.status,
+        error: globalCheckError?.message,
+      })
+
+      // If content exists but belongs to another user, return permission error
+      if (globalCheckData && globalCheckData.user_id !== userId) {
+        console.log(
+          'Content exists but belongs to another user:',
+          globalCheckData.user_id
+        )
+        return res.status(403).json({
+          status: false,
+          message: 'You do not have permission to access this content',
+          content: null,
+        })
+      }
+
+      // Now get the full content with relationships if it exists
       const { data, error } = await client
         .from('contents')
         .select(
-          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)'
+          `
+          *,
+          content_type:content_types (
+            id,
+            title,
+            name,
+            description,
+            fields
+          )
+        `
         )
         .eq('id', id)
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
+
+      console.log('Final query result:', {
+        exists: !!data,
+        error: error?.message,
+        typeId: data?.type_id,
+        status: data?.status,
+      })
 
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
           status: false,
-          message: error.message,
+          message: 'Error fetching content: ' + error.message,
           content: null,
+          details: error.details || null,
         })
       }
 
       if (!data) {
         return res.status(404).json({
           status: false,
-          message: 'Content not found',
+          message: `Content with ID ${id} not found`,
           content: null,
         })
       }

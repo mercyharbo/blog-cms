@@ -12,8 +12,9 @@ router.put('/types/:id', requireAuth, contentController.updateContentType)
 router.delete('/types/:id', requireAuth, contentController.deleteContentType)
 
 // Content management routes
-router.get('/', requireAuth, contentController.getContents) // Get all content with optional type filter
-router.get('/:id', requireAuth, contentController.getContent)
+router.get('/', requireAuth, contentController.getContents) // Get all contents
+router.get('/type/:id', requireAuth, contentController.getContents) // Get contents by type ID
+router.get('/:id', requireAuth, contentController.getContent) // Get single content
 router.post('/types/:id', requireAuth, contentController.createContent)
 router.put('/:id', requireAuth, contentController.updateContent)
 router.put('/:id/verify', requireAuth, contentController.verifyContent)
