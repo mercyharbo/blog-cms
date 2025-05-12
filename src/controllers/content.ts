@@ -78,12 +78,15 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
           details: error.details,
+          contentType: null,
         })
       }
 
       res.status(201).json({
+        status: true,
         message: 'Content type created successfully',
         contentType: data,
       })
@@ -116,12 +119,16 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
           details: error.details,
+          contentTypes: null,
         })
       }
 
       res.status(200).json({
+        status: true,
+        message: 'Content types retrieved successfully',
         contentTypes: data,
       })
     } catch (error: any) {
@@ -163,11 +170,15 @@ export const contentController = {
 
       if (!data) {
         return res.status(404).json({
+          status: false,
           message: 'Content type not found',
+          contentType: null,
         })
       }
 
       res.status(200).json({
+        status: true,
+        message: 'Content type retrieved successfully',
         contentType: data,
       })
     } catch (error: any) {
@@ -219,18 +230,23 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
           details: error.details,
+          contentType: null,
         })
       }
 
       if (!data) {
         return res.status(404).json({
+          status: false,
           message: 'Content type not found',
+          contentType: null,
         })
       }
 
       res.status(200).json({
+        status: true,
         message: 'Content type updated successfully',
         contentType: data,
       })
@@ -265,12 +281,14 @@ export const contentController = {
       if (error) {
         console.error('Supabase error:', error)
         return res.status(400).json({
+          status: false,
           message: error.message,
           details: error.details,
         })
       }
 
       res.status(200).json({
+        status: true,
         message: 'Content type deleted successfully',
       })
     } catch (error: any) {

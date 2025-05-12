@@ -9,18 +9,21 @@ export const authController = {
         email,
         password,
         options: {
-          emailRedirectTo: 'https://blog-cms-frontend-nine.vercel.app/auth/callback'
-        }
+          emailRedirectTo:
+            'https://blog-cms-frontend-nine.vercel.app/auth/callback',
+        },
       })
 
       if (error) throw error
 
       res.status(201).json({
+        status: true,
         message: 'User created successfully',
         user: data.user,
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -38,12 +41,14 @@ export const authController = {
       if (error) throw error
 
       res.status(200).json({
+        status: true,
         message: 'Login successful',
         user: data.user,
         session: data.session,
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -55,10 +60,12 @@ export const authController = {
       if (error) throw error
 
       res.status(200).json({
+        status: true,
         message: 'Logout successful',
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -95,6 +102,8 @@ export const authController = {
       }
 
       res.status(200).json({
+        status: true,
+        message: 'User profile retrieved successfully',
         user: {
           ...user,
           profile: {
@@ -107,6 +116,7 @@ export const authController = {
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -137,11 +147,13 @@ export const authController = {
       if (error) throw error
 
       res.status(200).json({
+        status: true,
         message: 'Profile updated successfully',
         profile: data,
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }

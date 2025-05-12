@@ -70,11 +70,13 @@ export const mediaController = {
       if (metadataError) throw metadataError
 
       res.status(201).json({
+        status: true,
         message: 'Media uploaded successfully',
         media: metadata,
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -99,10 +101,13 @@ export const mediaController = {
       if (error) throw error
 
       res.status(200).json({
+        status: true,
+        message: 'Media list retrieved successfully',
         media: data,
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -129,10 +134,13 @@ export const mediaController = {
       if (error) throw error
 
       res.status(200).json({
+        status: true,
+        message: 'Media retrieved successfully',
         media: data,
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
@@ -177,10 +185,12 @@ export const mediaController = {
       if (deleteError) throw deleteError
 
       res.status(200).json({
+        status: true,
         message: 'Media deleted successfully',
       })
     } catch (error: any) {
       res.status(400).json({
+        status: false,
         message: error.message,
       })
     }
