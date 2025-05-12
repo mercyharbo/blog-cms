@@ -158,4 +158,116 @@ export const authController = {
       })
     }
   },
+
+  forgotPassword: async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body
+
+      if (!email) {
+        return res.status(400).json({
+          status: false,
+          message: 'Email is required',
+        })
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo:
+          'https://blog-cms-frontend-nine.vercel.app/auth/reset-password',
+      })
+
+      if (error) throw error
+
+      res.status(200).json({
+        status: true,
+        message: 'Password reset email sent successfully',
+      })
+    } catch (error: any) {
+      res.status(400).json({
+        status: false,
+        message: error.message,
+      })
+    }
+  },
+
+  resetPassword: async (req: Request, res: Response) => {
+    try {
+      const { new_password } = req.body
+      const authHeader = req.headers.authorization
+
+      if (!authHeader) {
+        return res.status(401).json({
+          status: false,
+          message: 'Authorization token is required',
+        })
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: new_password,
+      })
+
+      if (error) throw error
+
+      res.status(200).json({
+        status: true,
+        message: 'Password reset successfully',
+      })
+    } catch (error: any) {
+      res.status(400).json({
+        status: false,
+        message: error.message,
+      })
+    }
+  },
+
+  changePassword: async (req: Request, res: Response) => {
+    try {
+      const { current_password, new_password } = req.body
+      const authHeader = req.headers.authorization
+      const userId = (req as any).user?.id
+
+      if (!userId || !authHeader) {
+        return res.status(401).json({
+          status: false,
+          message: 'User not authenticated',
+        })
+      }
+
+      if (!current_password || !new_password) {
+        return res.status(400).json({
+          status: false,
+          message: 'Current password and new password are required',
+        })
+      }
+
+      // First verify the current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: (req as any).user.email,
+        password: current_password,
+      })
+
+      if (signInError) {
+        return res.status(400).json({
+          status: false,
+          message: 'Current password is incorrect',
+        })
+      }
+
+      // If current password is correct, update to new password
+      const { error } = await supabase.auth.updateUser({
+        password: new_password,
+      })
+
+      if (error) throw error
+
+      res.status(200).json({
+        status: true,
+        message: 'Password changed successfully',
+      })
+    } catch (error: any) {
+      res.status(400).json({
+        status: false,
+        message: error.message,
+      })
+    }
+  },
 }
