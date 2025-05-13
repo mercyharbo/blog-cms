@@ -465,7 +465,6 @@ export const contentController = {
 
       // Set author as 'Anonymous' if is_anonymous is true, else use username
       const transformedContents = (contents || []).map((content) => {
-        // Supabase returns profile as an array, so use the first element
         const profile = Array.isArray(content.profile)
           ? content.profile[0]
           : content.profile
@@ -475,9 +474,25 @@ export const contentController = {
         } else if (profile?.username) {
           author = profile.username
         }
+        // Only include the fields you want at the root, and do NOT include the nested data object
+        // Do NOT spread ...content.data, instead pick the fields you want
         return {
-          ...content,
-          ...content.data,
+          id: content.id,
+          type_id: content.type_id,
+          user_id: content.user_id,
+          status: content.status,
+          scheduled_at: content.scheduled_at,
+          published_at: content.published_at,
+          created_at: content.created_at,
+          updated_at: content.updated_at,
+          title: content.data?.title,
+          slug: content.data?.slug,
+          content: content.data?.content,
+          cover_image: content.data?.cover_image,
+          reading_time: content.data?.reading_time,
+          tags: content.data?.tags,
+          meta_title: content.data?.meta_title,
+          meta_keywords: content.data?.meta_keywords,
           author,
         }
       })
@@ -937,7 +952,6 @@ export const contentController = {
 
       // Set author as 'Anonymous' if is_anonymous is true, else use username
       const transformedContents = (contents || []).map((content) => {
-        // Supabase returns profile as an array, so use the first element
         const profile = Array.isArray(content.profile)
           ? content.profile[0]
           : content.profile
@@ -947,9 +961,25 @@ export const contentController = {
         } else if (profile?.username) {
           author = profile.username
         }
+        // Only include the fields you want at the root, and do NOT include the nested data object
+        // Do NOT spread ...content.data, instead pick the fields you want
         return {
-          ...content,
-          ...content.data,
+          id: content.id,
+          type_id: content.type_id,
+          user_id: content.user_id,
+          status: content.status,
+          scheduled_at: content.scheduled_at,
+          published_at: content.published_at,
+          created_at: content.created_at,
+          updated_at: content.updated_at,
+          title: content.data?.title,
+          slug: content.data?.slug,
+          content: content.data?.content,
+          cover_image: content.data?.cover_image,
+          reading_time: content.data?.reading_time,
+          tags: content.data?.tags,
+          meta_title: content.data?.meta_title,
+          meta_keywords: content.data?.meta_keywords,
           author,
         }
       })
