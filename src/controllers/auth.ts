@@ -87,7 +87,7 @@ export const authController = {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .maybeSingle() // Use maybeSingle instead of single to avoid error when no profile exists
+        .maybeSingle()
 
       // If profile doesn't exist, create it
       if (!profile) {
@@ -111,6 +111,8 @@ export const authController = {
             last_name: profile?.last_name || null,
             avatar_url: profile?.avatar_url || null,
             bio: profile?.bio || null,
+            is_anonymous: profile?.is_anonymous || false,
+            username: profile?.username || null,
           },
         },
       })
@@ -124,7 +126,8 @@ export const authController = {
 
   updateProfile: async (req: Request, res: Response) => {
     try {
-      const { first_name, last_name, bio, avatar_url } = req.body
+      const { first_name, last_name, bio, avatar_url, is_anonymous, username } =
+        req.body
       const userId = (req as any).user?.id
 
       if (!userId) {
@@ -138,6 +141,8 @@ export const authController = {
           last_name,
           bio,
           avatar_url,
+          is_anonymous,
+          username,
           updated_at: new Date().toISOString(),
         })
         .eq('id', userId)

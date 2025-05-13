@@ -442,7 +442,7 @@ export const contentController = {
       let query = client
         .from('contents')
         .select(
-          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at'
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, profile:profiles(is_anonymous,username)'
         )
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
@@ -463,11 +463,29 @@ export const contentController = {
         })
       }
 
-      // Return contents without spreading data fields
+      // Set author as 'Anonymous' if is_anonymous is true, else use username
+      const transformedContents = (contents || []).map((content) => {
+        // Supabase returns profile as an array, so use the first element
+        const profile = Array.isArray(content.profile)
+          ? content.profile[0]
+          : content.profile
+        let author = content.data?.author
+        if (profile?.is_anonymous) {
+          author = 'Anonymous'
+        } else if (profile?.username) {
+          author = profile.username
+        }
+        return {
+          ...content,
+          ...content.data,
+          author,
+        }
+      })
+
       res.status(200).json({
         status: true,
         message: 'Contents fetched successfully',
-        contents: contents,
+        contents: transformedContents,
       })
     } catch (error: any) {
       console.error('Error fetching contents:', error)
@@ -896,7 +914,7 @@ export const contentController = {
       let query = client
         .from('contents')
         .select(
-          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)',
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*), profile:profiles(is_anonymous,username)',
           { count: 'exact' }
         )
         .eq('status', 'published')
@@ -917,10 +935,24 @@ export const contentController = {
         })
       }
 
-      const transformedContents = (contents || []).map((content) => ({
-        ...content,
-        ...content.data,
-      }))
+      // Set author as 'Anonymous' if is_anonymous is true, else use username
+      const transformedContents = (contents || []).map((content) => {
+        // Supabase returns profile as an array, so use the first element
+        const profile = Array.isArray(content.profile)
+          ? content.profile[0]
+          : content.profile
+        let author = content.data?.author
+        if (profile?.is_anonymous) {
+          author = 'Anonymous'
+        } else if (profile?.username) {
+          author = profile.username
+        }
+        return {
+          ...content,
+          ...content.data,
+          author,
+        }
+      })
 
       res.status(200).json({
         contents: transformedContents,
