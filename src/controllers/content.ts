@@ -888,22 +888,26 @@ export const contentController = {
   getPublishedContents: async (req: Request, res: Response) => {
     try {
       const { type_id } = req.params
-      const authHeader = req.headers.authorization
-
-      if (!authHeader) {
-        return res.status(401).json({
-          message: 'API key required',
-        })
-      }
-
-      const client = getSupabaseClient(authHeader)
-      const { data: contents, error } = await client
+      const page = parseInt(req.query.page as string) || 1
+      const pageSize = 25
+      const from = (page - 1) * pageSize
+      const to = from + pageSize - 1
+      const client = getSupabaseClient(process.env.SUPABASE_SERVICE_KEY || '')
+      let query = client
         .from('contents')
         .select(
-          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)'
+          'id, type_id, user_id, status, scheduled_at, published_at, data, created_at, updated_at, content_type:content_types(*)',
+          { count: 'exact' }
         )
-        .eq('type_id', type_id)
         .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .range(from, to)
+
+      if (type_id) {
+        query = query.eq('type_id', type_id)
+      }
+
+      const { data: contents, error, count } = await query
 
       if (error) {
         console.error('Supabase error:', error)
@@ -913,14 +917,17 @@ export const contentController = {
         })
       }
 
-      // Transform the response to merge the nested data
-      const transformedContents = contents.map((content) => ({
+      const transformedContents = (contents || []).map((content) => ({
         ...content,
         ...content.data,
       }))
 
       res.status(200).json({
         contents: transformedContents,
+        length: transformedContents.length,
+        total: count || 0,
+        page,
+        pageSize,
       })
     } catch (error: any) {
       console.error('Error fetching published contents:', error)
@@ -934,15 +941,9 @@ export const contentController = {
   getPublishedContent: async (req: Request, res: Response) => {
     try {
       const { id } = req.params
-      const authHeader = req.headers.authorization
-
-      if (!authHeader) {
-        return res.status(401).json({
-          message: 'API key required',
-        })
-      }
-
-      const client = getSupabaseClient(authHeader)
+      // Remove authHeader check for public endpoint
+      // Use service key for public access
+      const client = getSupabaseClient(process.env.SUPABASE_SERVICE_KEY || '')
       const { data, error } = await client
         .from('contents')
         .select(
