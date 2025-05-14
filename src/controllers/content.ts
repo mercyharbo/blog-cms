@@ -267,6 +267,7 @@ export const contentController = {
 
       if (!userId || !authHeader) {
         return res.status(401).json({
+          status: false,
           message: 'User not authenticated',
         })
       }
@@ -294,6 +295,7 @@ export const contentController = {
     } catch (error: any) {
       console.error('Error deleting content type:', error)
       res.status(500).json({
+        status: false,
         message: 'Internal server error',
         error: error.message,
       })
