@@ -19,6 +19,7 @@ const corsOptions = {
     'http://localhost:5000',
     'https://blog-cms-frontend-nine.vercel.app',
     'https://blog-cms-iml5.onrender.com',
+    'https://sparks-and-stories.vercel.app',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
