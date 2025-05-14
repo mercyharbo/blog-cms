@@ -32,31 +32,10 @@ const corsOptions = {
   exposedHeaders: ['Authorization'],
   credentials: true,
   optionsSuccessStatus: 200,
-  preflightContinue: false,
-  maxAge: 86400, // Enable CORS preflight caching for 24 hours
 }
 
-// Apply CORS with configuration
+// Apply CORS middleware before any routes
 app.use(cors(corsOptions))
-
-// Ensure CORS headers are set for all routes, including errors
-app.use((req, res, next) => {
-  const origin = req.headers.origin
-  if (origin && corsOptions.origin.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin)
-  }
-  res.header('Access-Control-Allow-Credentials', 'true')
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.header(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-  )
-  res.header('Access-Control-Max-Age', '86400')
-  next()
-})
-
-// Handle preflight requests
-app.options('*', cors(corsOptions))
 
 // Middleware with increased limits
 app.use(express.json({ limit: '50mb' }))
