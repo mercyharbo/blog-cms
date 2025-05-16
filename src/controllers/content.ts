@@ -18,6 +18,29 @@ export const contentController = {
         })
       }
 
+      const client = getSupabaseClient(authHeader)
+
+      // Fetch user profile to check role
+      const { data: profile, error: profileError } = await client
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (profileError || !profile) {
+        return res.status(403).json({
+          message: 'Unable to verify user role',
+          error: profileError?.message || 'No profile found',
+        })
+      }
+
+      // Deny access if not admin
+      if (profile.role !== 'admin') {
+        return res.status(403).json({
+          message: 'Access denied: Admins only',
+        })
+      }
+
       // Validate required fields
       if (
         !simpleContentType.title ||
@@ -28,25 +51,16 @@ export const contentController = {
           message:
             'Missing required fields: title, slug, and description are required',
         })
-      } // Transform the simple payload into the required database format
+      }
+
       const contentTypeData = {
         title: simpleContentType.title,
         name: simpleContentType.slug,
         description: simpleContentType.description,
         user_id: userId,
         fields: [
-          {
-            name: 'title',
-            type: 'string',
-            title: 'Title',
-            required: true,
-          },
-          {
-            name: 'slug',
-            type: 'string',
-            title: 'Slug',
-            required: true,
-          },
+          { name: 'title', type: 'string', title: 'Title', required: true },
+          { name: 'slug', type: 'string', title: 'Slug', required: true },
           {
             name: 'description',
             type: 'text',
@@ -68,7 +82,6 @@ export const contentController = {
         ],
       }
 
-      const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('content_types')
         .insert(contentTypeData)
@@ -111,10 +124,9 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { data, error } = await client
-        .from('content_types')
-        .select('*')
-        .eq('user_id', userId)
+
+      // Fetch all content types (no user_id filter)
+      const { data, error } = await client.from('content_types').select('*')
 
       if (error) {
         console.error('Supabase error:', error)
@@ -203,6 +215,28 @@ export const contentController = {
         })
       }
 
+      const client = getSupabaseClient(authHeader)
+
+      // Fetch user role
+      const { data: profile, error: profileError } = await client
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (profileError || !profile) {
+        return res.status(403).json({
+          message: 'Unable to verify user role',
+          error: profileError?.message || 'No profile found',
+        })
+      }
+
+      if (profile.role !== 'admin') {
+        return res.status(403).json({
+          message: 'Access denied: Only admins can update content types',
+        })
+      }
+
       // Validate required fields
       if (
         !simpleContentType.title ||
@@ -214,7 +248,6 @@ export const contentController = {
         })
       }
 
-      const client = getSupabaseClient(authHeader)
       const { data, error } = await client
         .from('content_types')
         .update({
@@ -223,7 +256,6 @@ export const contentController = {
           description: simpleContentType.description,
         })
         .eq('id', id)
-        .eq('user_id', userId)
         .select()
         .single()
 
@@ -273,11 +305,29 @@ export const contentController = {
       }
 
       const client = getSupabaseClient(authHeader)
-      const { error } = await client
-        .from('content_types')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', userId)
+
+      // Check user role
+      const { data: profile, error: profileError } = await client
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (profileError || !profile) {
+        return res.status(403).json({
+          message: 'Unable to verify user role',
+          error: profileError?.message || 'No profile found',
+        })
+      }
+
+      if (profile.role !== 'admin') {
+        return res.status(403).json({
+          message: 'Access denied: Only admins can delete content types',
+        })
+      }
+
+      // Proceed with deletion
+      const { error } = await client.from('content_types').delete().eq('id', id)
 
       if (error) {
         console.error('Supabase error:', error)

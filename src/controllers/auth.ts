@@ -82,18 +82,18 @@ export const authController = {
         throw new Error(userError?.message || 'User not found')
       }
 
-      // Try to fetch the user's profile
+      // Fetch or create the profile
       let { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle()
 
-      // If profile doesn't exist, create it
+      // If profile doesn't exist, create it with default role 'user'
       if (!profile) {
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
-          .insert([{ id: user.id }])
+          .insert([{ id: user.id, role: 'user' }]) // Set default role here
           .select()
           .single()
 
@@ -107,12 +107,13 @@ export const authController = {
         user: {
           ...user,
           profile: {
-            first_name: profile?.first_name || null,
-            last_name: profile?.last_name || null,
-            avatar_url: profile?.avatar_url || null,
-            bio: profile?.bio || null,
-            is_anonymous: profile?.is_anonymous || false,
-            username: profile?.username || null,
+            first_name: profile.first_name || null,
+            last_name: profile.last_name || null,
+            avatar_url: profile.avatar_url || null,
+            bio: profile.bio || null,
+            is_anonymous: profile.is_anonymous || false,
+            username: profile.username || null,
+            role: profile.role || 'user', // Include role in response
           },
         },
       })
@@ -123,6 +124,59 @@ export const authController = {
       })
     }
   },
+
+  // getCurrentUser: async (req: Request, res: Response) => {
+  //   try {
+  //     const {
+  //       data: { user },
+  //       error: userError,
+  //     } = await supabase.auth.getUser()
+
+  //     if (userError || !user) {
+  //       throw new Error(userError?.message || 'User not found')
+  //     }
+
+  //     // Try to fetch the user's profile
+  //     let { data: profile, error: profileError } = await supabase
+  //       .from('profiles')
+  //       .select('*')
+  //       .eq('id', user.id)
+  //       .maybeSingle()
+
+  //     // If profile doesn't exist, create it
+  //     if (!profile) {
+  //       const { data: newProfile, error: createError } = await supabase
+  //         .from('profiles')
+  //         .insert([{ id: user.id }])
+  //         .select()
+  //         .single()
+
+  //       if (createError) throw createError
+  //       profile = newProfile
+  //     }
+
+  //     res.status(200).json({
+  //       status: true,
+  //       message: 'User profile retrieved successfully',
+  //       user: {
+  //         ...user,
+  //         profile: {
+  //           first_name: profile?.first_name || null,
+  //           last_name: profile?.last_name || null,
+  //           avatar_url: profile?.avatar_url || null,
+  //           bio: profile?.bio || null,
+  //           is_anonymous: profile?.is_anonymous || false,
+  //           username: profile?.username || null,
+  //         },
+  //       },
+  //     })
+  //   } catch (error: any) {
+  //     res.status(400).json({
+  //       status: false,
+  //       message: error.message,
+  //     })
+  //   }
+  // },
 
   updateProfile: async (req: Request, res: Response) => {
     try {
