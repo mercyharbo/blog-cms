@@ -8,7 +8,7 @@ interface MediaMetadata {
   mimetype: string
   size: number
   url: string
-  user_id: string
+  user_id?: string // Made optional for public uploads
   description?: string
   alt_text?: string
   metadata?: any
@@ -19,32 +19,66 @@ interface MediaMetadata {
 export const mediaController = {
   uploadMedia: async (req: Request, res: Response) => {
     try {
-      if (!req.file) {
-        throw new Error('No file uploaded')
-      }
-
-      const file = req.file
       const user_id = (req as any).user?.id
       const authHeader = req.headers.authorization
 
-      if (!user_id || !authHeader) {
-        throw new Error('User not authenticated')
+      let fileBuffer: Buffer
+      let originalname: string
+      let mimetype: string
+      let size: number
+
+      if (req.file) {
+        // Handle multipart/form-data file upload
+        const file = req.file
+        fileBuffer = file.buffer
+        originalname = file.originalname
+        mimetype = file.mimetype
+        size = file.size
+      } else if (
+        req.body.file &&
+        typeof req.body.file === 'string' &&
+        req.body.file.startsWith('data:')
+      ) {
+        // Handle base64-encoded string
+        const base64String = req.body.file
+        const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
+        if (!matches || matches.length !== 3) {
+          throw new Error('Invalid base64 string')
+        }
+        const [, mime, base64Data] = matches
+        fileBuffer = Buffer.from(base64Data, 'base64')
+        originalname = req.body.originalname || 'uploaded-file'
+        mimetype = mime
+        size = fileBuffer.length
+        if (
+          !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(
+            mimetype
+          )
+        ) {
+          throw new Error('Unsupported file type')
+        }
+      } else {
+        throw new Error('No file or base64 data provided')
       }
 
       // Generate a unique filename
       const timestamp = Date.now()
-      const uniqueFilename = `${timestamp}-${file.originalname}`
+      const extension = mimetype.split('/')[1]
+      const uniqueFilename = `${timestamp}-${originalname}`
 
       const client = getSupabaseClient(authHeader)
 
       // Upload file to Supabase Storage
       const { data: uploadData, error: uploadError } = await client.storage
         .from('media')
-        .upload(uniqueFilename, file.buffer, {
-          contentType: file.mimetype,
+        .upload(uniqueFilename, fileBuffer, {
+          contentType: mimetype,
         })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Storage Upload Error:', uploadError)
+        throw uploadError
+      }
 
       // Get the public URL
       const {
@@ -54,11 +88,11 @@ export const mediaController = {
       // Save media metadata
       const mediaMetadata: MediaMetadata = {
         filename: uniqueFilename,
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
+        originalname,
+        mimetype,
+        size,
         url: publicUrl,
-        user_id,
+        user_id: user_id || undefined, // Omit user_id if not authenticated
       }
 
       const { data: metadata, error: metadataError } = await client
@@ -67,7 +101,10 @@ export const mediaController = {
         .select()
         .single()
 
-      if (metadataError) throw metadataError
+      if (metadataError) {
+        console.error('Metadata Insert Error:', metadataError)
+        throw metadataError
+      }
 
       res.status(201).json({
         status: true,
@@ -82,6 +119,7 @@ export const mediaController = {
     }
   },
 
+  // Other methods unchanged
   getMediaList: async (req: Request, res: Response) => {
     try {
       const user_id = (req as any).user?.id
@@ -158,7 +196,6 @@ export const mediaController = {
 
       const client = getSupabaseClient(authHeader)
 
-      // Get media metadata
       const { data: media, error: fetchError } = await client
         .from('media')
         .select('*')
@@ -168,14 +205,12 @@ export const mediaController = {
 
       if (fetchError) throw fetchError
 
-      // Delete file from storage
       const { error: storageError } = await client.storage
         .from('media')
         .remove([media.filename])
 
       if (storageError) throw storageError
 
-      // Delete metadata
       const { error: deleteError } = await client
         .from('media')
         .delete()
