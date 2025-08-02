@@ -8,7 +8,7 @@ interface MediaMetadata {
   mimetype: string
   size: number
   url: string
-  user_id?: string // Made optional for public uploads
+  user_id?: string
   description?: string
   alt_text?: string
   metadata?: any
@@ -26,6 +26,7 @@ export const mediaController = {
       let originalname: string
       let mimetype: string
       let size: number
+      let url: string
 
       if (req.file) {
         // Handle multipart/form-data file upload
@@ -34,6 +35,7 @@ export const mediaController = {
         originalname = file.originalname
         mimetype = file.mimetype
         size = file.size
+        url = `data:${mimetype};base64,${fileBuffer.toString('base64')}`
       } else if (
         req.body.file &&
         typeof req.body.file === 'string' &&
@@ -50,10 +52,15 @@ export const mediaController = {
         originalname = req.body.originalname || 'uploaded-file'
         mimetype = mime
         size = fileBuffer.length
+        url = base64String // Use the provided base64 string
         if (
-          !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(
-            mimetype
-          )
+          ![
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'application/pdf',
+          ].includes(mimetype)
         ) {
           throw new Error('Unsupported file type')
         }
@@ -66,33 +73,16 @@ export const mediaController = {
       const extension = mimetype.split('/')[1]
       const uniqueFilename = `${timestamp}-${originalname}`
 
-      const client = getSupabaseClient(authHeader)
+      const client = getSupabaseClient(authHeader || '')
 
-      // Upload file to Supabase Storage
-      const { data: uploadData, error: uploadError } = await client.storage
-        .from('media')
-        .upload(uniqueFilename, fileBuffer, {
-          contentType: mimetype,
-        })
-
-      if (uploadError) {
-        console.error('Storage Upload Error:', uploadError)
-        throw uploadError
-      }
-
-      // Get the public URL
-      const {
-        data: { publicUrl },
-      } = client.storage.from('media').getPublicUrl(uniqueFilename)
-
-      // Save media metadata
+      // Save media metadata with base64 URL
       const mediaMetadata: MediaMetadata = {
         filename: uniqueFilename,
         originalname,
         mimetype,
         size,
-        url: publicUrl,
-        user_id: user_id || undefined, // Omit user_id if not authenticated
+        url,
+        user_id: user_id || undefined,
       }
 
       const { data: metadata, error: metadataError } = await client
@@ -112,6 +102,7 @@ export const mediaController = {
         media: metadata,
       })
     } catch (error: any) {
+      console.error('Upload Error:', error)
       res.status(400).json({
         status: false,
         message: error.message,
@@ -119,7 +110,6 @@ export const mediaController = {
     }
   },
 
-  // Other methods unchanged
   getMediaList: async (req: Request, res: Response) => {
     try {
       const user_id = (req as any).user?.id
@@ -204,12 +194,6 @@ export const mediaController = {
         .single()
 
       if (fetchError) throw fetchError
-
-      const { error: storageError } = await client.storage
-        .from('media')
-        .remove([media.filename])
-
-      if (storageError) throw storageError
 
       const { error: deleteError } = await client
         .from('media')
